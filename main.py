@@ -2,10 +2,13 @@ from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine
 from src.extract import extract
-from src.transform import transform_page, transform_choice
+from src.transform import transform
 from src.load import load
+from src.logging import start
 
 load_dotenv()
+
+logger = start()
 
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
@@ -17,21 +20,14 @@ DB_PREFIX = os.getenv("DB_PREFIX")
 engine = create_engine(f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 def main():
-    dataframes = extract(engine, DB_PREFIX)
-
-    if "page" in dataframes or "choice" in dataframes:
-        print(f"♻️ Starting the transforming process...\n")
-
-        if "page" in dataframes:
-            dataframes["page"] = transform_page(dataframes["page"])
-
-        if "choice" in dataframes:
-            dataframes["choice"] = transform_choice(dataframes["choice"])
-
-        print(f"♻️ End of transforming process\n")
-
-    load(dataframes)
-
+    try:
+        logger.debug("ETL process started...")
+        dataframes = extract(engine, DB_PREFIX)
+        dataframes = transform(dataframes)
+        load(dataframes)
+        logger.info("ETL process completed successfully!")
+    except Exception as e:
+        logger.critical(f"ETL process failed: {e}.")
 
 if __name__ == "__main__":
     main()

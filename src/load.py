@@ -2,24 +2,18 @@ from typing import Dict, List
 import pandas as pd
 import os
 import datetime
+from src.logging import start
 
 
-def dynamic_table_return(table: str, df: pd.DataFrame, columns: List[str]):
-    try:
-        print(f"✅ {table.upper()} return:\n{df[columns].head().to_string(index=False)}\n")
-    except KeyError as e:
-        print(f"☠️ Column not found in {table.upper()}: {e}\n")
+logger = start()
 
 
-def page_table(table: str, df: pd.DataFrame):
-    print(f"✅ {table.upper()} return:\n{df[['id', 'name', 'course', 'content_link']].head().to_string(index=False)}\n")
-
-
-def choice_table(table: str, df: pd.DataFrame):
+def if_table_choice(table: str, df: pd.DataFrame):
     matching = df[df["match"]]
     not_matching = df[~df["match"]]
-    print(f"✅ {table.upper()} rows matching 'Política de Assinatura' or 'Signature Policy':\n{matching[['id', 'name', 'course']].head().to_string(index=False)}\n")
-    print(f"❌ There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.\n")
+    logger.info(f"{table.upper()} has {len(matching)} rows matching 'Política de Assinatura' or 'Signature Policy'.")
+    if len(not_matching) != 0:
+        logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 
 
 def get_unique_filename(output_dir: str) -> str:
@@ -34,44 +28,29 @@ def get_unique_filename(output_dir: str) -> str:
 
 
 def load(dataframes: Dict[str, pd.DataFrame]):
-    print(f"📰 Starting the loading process...\n\n")
+    logger.debug(f"Starting the loading process...")
 
     output_dir = "src/loaded"
     os.makedirs(output_dir, exist_ok=True)
     output_path = get_unique_filename(output_dir)
     
     with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
-        for table, df in dataframes.items():
-            if df.empty:
-                print(f"⚠️ Warning: DataFrame {table.upper()} is empty.\n")
-                continue
+        try:
+            for table, df in dataframes.items():
+                logger.debug(f"Processing table '{table.upper()}' for Excel export...")
+                if df.empty:
+                    logger.warning(f"{table.upper()} is empty.")
+                    continue
 
-            print(f"✅ DataFrame {table.upper()} extracted successfully with {len(df)} rows.")
+                logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
-            if table == "course":
-                dynamic_table_return(table, df, ['id', 'fullname'])
-            elif table == "course_sections":
-                dynamic_table_return(table, df, ['id', 'name', 'course'])
-            elif table == "course_modules":
-                dynamic_table_return(table, df, ['id', 'course', 'module', 'instance', 'section'])
-            elif table == "modules":
-                dynamic_table_return(table, df, ['id', 'name'])
-            elif table == "feedback":
-                dynamic_table_return(table, df, ['id', 'name', 'course'])
-            elif table == "quiz":
-                dynamic_table_return(table, df, ['id', 'name', 'course'])
-            elif table == "forum":
-                dynamic_table_return(table, df, ['id', 'name', 'course'])
-            elif table == "reengagement":
-                dynamic_table_return(table, df, ['id', 'name', 'course'])
-            elif table == "url":
-                dynamic_table_return(table, df, ['id', 'name', 'course', 'externalurl'])
-            elif table == "page":
-                page_table(table, df)
-            elif table == "choice":
-                choice_table(table, df)
+                if table == "choice":
+                    if_table_choice(table, df)
 
-            print(f"✅ DataFrame {table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.\n")
+                logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
-            df.to_excel(writer, sheet_name=table, index=False)
-    print(f"📰 End of loading process\n\n")
+                df.to_excel(writer, sheet_name=table, index=False)
+            logger.info(f"File successfully saved: {output_path}.")
+        except Exception as e:
+            logger.error(f"Error creating the xlsx file: {e}.")
+    logger.info(f"End of loading process.")

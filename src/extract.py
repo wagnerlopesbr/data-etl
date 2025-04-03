@@ -1,8 +1,12 @@
 import pandas as pd
+from src.logging import start
+
+
+logger = start()
 
 
 def extract(engine, DB_PREFIX: str) -> pd.DataFrame:
-    print(f"🔎 Starting the extraction process...\n\n")
+    logger.debug(f"Starting the extraction process...")
     
     queries = {
         "course": f"SELECT * FROM {DB_PREFIX}_course WHERE format <> 'site'",
@@ -56,8 +60,12 @@ def extract(engine, DB_PREFIX: str) -> pd.DataFrame:
     dataframes = {}
     with engine.connect() as connection:
         for table, query in queries.items():
-            df = pd.read_sql(query, connection)
-            print(f"✅ Extracted {len(df)} rows from {table.upper()}\n")
-            dataframes[table] = df
-    print(f"🔎 End of extraction process\n\n")
+            try:
+                logger.debug(f"Running query for '{table.upper()}'...")
+                df = pd.read_sql(query, connection)
+                logger.info(f"Extracted {len(df)} rows from {table.upper()}.")
+                dataframes[table] = df
+            except Exception as e:
+                logger.error(f"Error extracting {table.upper()}: {e}.")
+    logger.info(f"End of extraction process.")
     return dataframes
