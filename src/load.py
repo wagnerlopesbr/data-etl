@@ -27,7 +27,7 @@ def get_unique_filename(output_dir: str) -> str:
         version += 1
 
 
-def load(dataframes: Dict[str, pd.DataFrame]):
+def load(dataframes: Dict[str, pd.DataFrame], new_engine, new_db):
     logger.debug(f"Starting the loading process...")
 
     output_dir = "src/loaded"
@@ -45,16 +45,23 @@ def load(dataframes: Dict[str, pd.DataFrame]):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    # checking logging a specific value
-                    ids = [400, 401, 402, 403]
-                    specific_values = df[df["id"].isin(ids)]
-
-                    if not specific_values.empty:
-                        for row in specific_values.to_dict(orient="records"):
-                            logger.info(f"COURSE ID {row['id']}: {row}")
-
+                    prefixed_table = f"{new_db.prefix}_{table}"
+                    # migrating one course from old to new db
+                    id = 54
+                    course = df[df["id"] == id]
+                    if course.empty:
+                        logger.warning(f"No row(s) found in 'COURSE' with id {id}.")
                     else:
-                        logger.info(f"No rows found in 'COURSE' with id in {ids}")
+                        try:
+                            course_copy = course.copy()
+                            course_copy["category"] = 10
+                            course_copy = course_copy.drop(columns=["id"])  # removing the old ID to generate a new one
+
+                            # inserting the modified course into the new database (need to adjust the logic behind adding a new course into the new db; other important and relevant tables are not being copied yet.)
+                            course_copy.to_sql(prefixed_table, new_engine, if_exists="append", index=False)
+                            logger.info(f"COURSE based on ID {id} inserted successfully!")
+                        except Exception as e:
+                            logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
 
                 if table == "choice":
                     if_table_choice(table, df)
