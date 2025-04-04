@@ -33,7 +33,7 @@ def start(log_level="debug", log_dir="src/logs", name="etl_logger"):
     )
 
     # File handler 
-    file_handler = logging.FileHandler(log_path, mode="a")  # mode="a" to append new logs
+    file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")  # mode="a" to append new logs
     file_handler.setLevel(selected_level)  # filtering which method
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)

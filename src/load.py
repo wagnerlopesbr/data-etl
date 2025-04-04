@@ -44,6 +44,18 @@ def load(dataframes: Dict[str, pd.DataFrame]):
 
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
+                if table == "course":
+                    # checking logging a specific value
+                    ids = [400, 401, 402, 403]
+                    specific_values = df[df["id"].isin(ids)]
+
+                    if not specific_values.empty:
+                        for row in specific_values.to_dict(orient="records"):
+                            logger.info(f"COURSE ID {row['id']}: {row}")
+
+                    else:
+                        logger.info(f"No rows found in 'COURSE' with id in {ids}")
+
                 if table == "choice":
                     if_table_choice(table, df)
 
