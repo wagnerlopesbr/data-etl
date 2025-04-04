@@ -9,8 +9,8 @@ logger = start()
 
 
 def if_table_choice(table: str, df: pd.DataFrame):
-    matching = df[df["match"]]
-    not_matching = df[~df["match"]]
+    matching = df[df["match_name_filtering"]]
+    not_matching = df[~df["match_name_filtering"]]
     logger.info(f"{table.upper()} has {len(matching)} rows matching 'Política de Assinatura' or 'Signature Policy'.")
     if len(not_matching) != 0:
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
@@ -50,7 +50,7 @@ def load(dataframes: Dict[str, pd.DataFrame]):
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
                 df.to_excel(writer, sheet_name=table, index=False)
-            logger.info(f"File successfully saved: {output_path}.")
+            logger.info(f"File successfully saved: {os.path.basename(output_path)}.")
         except Exception as e:
             logger.error(f"Error creating the xlsx file: {e}.")
     logger.info(f"End of loading process.")

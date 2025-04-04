@@ -35,12 +35,17 @@ def transform_page(df: pd.DataFrame) -> pd.DataFrame:
 def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug(f"Transforming content of the CHOICE table...")
     df = df.copy()
-    df["match"] = df["name"].isin(["Política de Assinatura", "Signature Policy"])
+    df["match_name_filtering"] = df["name"].isin(["Política de Assinatura", "Signature Policy"])
     logger.info(f"CHOICE table content transformed successfully.")
     return df
 
 
 def transform(dataframes):
+    has_relevant_dataframe = "page" in dataframes or "choice" in dataframes
+    if not has_relevant_dataframe:
+        logger.info("No relevant dataframes to transform.")
+        return dataframes
+
     logger.debug("Starting the transforming process...")
 
     if "page" in dataframes:

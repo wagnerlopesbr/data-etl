@@ -5,13 +5,14 @@ from src.extract import extract
 from src.transform import transform
 from src.load import load
 from src.logging import start
+from urllib.parse import quote_plus
 
 load_dotenv()
 
 logger = start()
 
 DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_PASSWORD = quote_plus(os.getenv("DB_PASSWORD"))
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
