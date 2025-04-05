@@ -5,21 +5,24 @@ from src.logging import start
 logger = start()
 
 
-def extract(engine, OLD_DB_PREFIX: str) -> pd.DataFrame:
+def extract(engine, DB_PREFIX):
     logger.debug(f"Starting the extraction process...")
     
     queries = {
-        "course": f"SELECT * FROM {OLD_DB_PREFIX}_course WHERE format <> 'site'",
-        "course_sections": f"SELECT * FROM {OLD_DB_PREFIX}_course_sections",
-        "course_modules": f"SELECT * FROM {OLD_DB_PREFIX}_course_modules",
-        "modules": f"SELECT * FROM {OLD_DB_PREFIX}_modules",
-        "page": f"SELECT * FROM {OLD_DB_PREFIX}_page",
-        "feedback": f"SELECT * FROM {OLD_DB_PREFIX}_feedback",
-        "choice": f"SELECT * FROM {OLD_DB_PREFIX}_choice",
-        "quiz": f"SELECT * FROM {OLD_DB_PREFIX}_quiz",
-        "url": f"SELECT * FROM {OLD_DB_PREFIX}_url",
-        "forum": f"SELECT * FROM {OLD_DB_PREFIX}_forum",
-        "reengagement": f"SELECT * FROM {OLD_DB_PREFIX}_reengagement",
+        "context_course": f"SELECT * FROM {DB_PREFIX}_context WHERE contextlevel = 50",
+        "context_category": f"SELECT * FROM {DB_PREFIX}_context WHERE contextlevel = 40",
+        "course_categories": f"SELECT * FROM {DB_PREFIX}_course_categories",
+        "course": f"SELECT * FROM {DB_PREFIX}_course WHERE format <> 'site'",
+        "course_sections": f"SELECT * FROM {DB_PREFIX}_course_sections",
+        "course_modules": f"SELECT * FROM {DB_PREFIX}_course_modules",
+        "modules": f"SELECT * FROM {DB_PREFIX}_modules",
+        "page": f"SELECT * FROM {DB_PREFIX}_page",
+        "feedback": f"SELECT * FROM {DB_PREFIX}_feedback",
+        "choice": f"SELECT * FROM {DB_PREFIX}_choice",
+        "quiz": f"SELECT * FROM {DB_PREFIX}_quiz",
+        "url": f"SELECT * FROM {DB_PREFIX}_url",
+        "forum": f"SELECT * FROM {DB_PREFIX}_forum",
+        "reengagement": f"SELECT * FROM {DB_PREFIX}_reengagement",
         "course_modules_sections": f"""
                                        SELECT
                                        c.id AS course_id,
@@ -31,10 +34,10 @@ def extract(engine, OLD_DB_PREFIX: str) -> pd.DataFrame:
                                        cm.module AS course_module_type_id,
                                        m.name AS course_module_type,
                                        cm.instance AS course_module_instance_id
-                                       FROM {OLD_DB_PREFIX}_course_modules cm
-                                       JOIN {OLD_DB_PREFIX}_course c ON c.id = cm.course
-                                       JOIN {OLD_DB_PREFIX}_course_sections cs ON cs.id = cm.section
-                                       JOIN {OLD_DB_PREFIX}_modules m ON m.id = cm.module
+                                       FROM {DB_PREFIX}_course_modules cm
+                                       JOIN {DB_PREFIX}_course c ON c.id = cm.course
+                                       JOIN {DB_PREFIX}_course_sections cs ON cs.id = cm.section
+                                       JOIN {DB_PREFIX}_modules m ON m.id = cm.module
                                     """
     }
 
@@ -50,11 +53,11 @@ def extract(engine, OLD_DB_PREFIX: str) -> pd.DataFrame:
                 m.name AS course_module_type,
                 cm.instance AS course_module_instance_id,
                 t.*
-            FROM {OLD_DB_PREFIX}_course_modules cm
-            JOIN {OLD_DB_PREFIX}_course c ON c.id = cm.course
-            JOIN {OLD_DB_PREFIX}_course_sections cs ON cs.id = cm.section
-            JOIN {OLD_DB_PREFIX}_modules m ON m.id = cm.module
-            JOIN {OLD_DB_PREFIX}_{type} t ON t.id = cm.instance AND m.name = '{type}'
+            FROM {DB_PREFIX}_course_modules cm
+            JOIN {DB_PREFIX}_course c ON c.id = cm.course
+            JOIN {DB_PREFIX}_course_sections cs ON cs.id = cm.section
+            JOIN {DB_PREFIX}_modules m ON m.id = cm.module
+            JOIN {DB_PREFIX}_{type} t ON t.id = cm.instance AND m.name = '{type}'
         """
 
     dataframes = {}
