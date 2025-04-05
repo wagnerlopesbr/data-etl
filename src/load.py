@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import datetime
 from src.logging import start
+from sqlalchemy import text
 
 
 logger = start()
@@ -46,20 +47,74 @@ def load(dataframes: Dict[str, pd.DataFrame], new_engine, new_db):
 
                 if table == "course":
                     prefixed_table = f"{new_db.prefix}_{table}"
+                    context_table = f"{new_db.prefix}_context"
                     # migrating one course from old to new db
-                    id = 54
+                    id = 52
                     course = df[df["id"] == id]
                     if course.empty:
                         logger.warning(f"No row(s) found in 'COURSE' with id {id}.")
                     else:
                         try:
                             course_copy = course.copy()
-                            course_copy["category"] = 10
+                            course_copy["category"] = 9
                             course_copy = course_copy.drop(columns=["id"])  # removing the old ID to generate a new one
 
                             # inserting the modified course into the new database (need to adjust the logic behind adding a new course into the new db; other important and relevant tables are not being copied yet.)
                             course_copy.to_sql(prefixed_table, new_engine, if_exists="append", index=False)
                             logger.info(f"COURSE based on ID {id} inserted successfully!")
+
+                            # inserting a context into the new database
+                            # Recuperar o novo ID do curso
+                            with new_engine.begin() as conn:
+                                result = conn.execute(text(f"SELECT id FROM {prefixed_table} ORDER BY id DESC LIMIT 1"))
+                                new_course_id = result.scalar()
+                                logger.debug(f"New course ID: {new_course_id}")
+
+                                if not new_course_id:
+                                    raise ValueError("Failed to retrieve new course ID after insertion.")
+
+                                category_id = course_copy["category"].iloc[0]
+                                result = conn.execute(text(
+                                    f"""
+                                    SELECT id FROM {context_table}
+                                    WHERE contextlevel = 40 AND instanceid = {category_id}
+                                    LIMIT 1
+                                    """
+                                ))
+                                context_category_id = result.scalar()
+                                logger.debug(f"Context category ID found: {context_category_id}")
+
+                                if not context_category_id:
+                                    raise ValueError(f"No context category found for instanceid {category_id}.")
+
+                                logger.debug("Inserting context row...")
+                                conn.execute(text(
+                                    f"""
+                                    INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
+                                    VALUES (50, {new_course_id}, 3, NULL)
+                                    """
+                                ))
+
+                                result = conn.execute(text(
+                                    f"""
+                                    SELECT id FROM {context_table}
+                                    WHERE contextlevel = 50 AND instanceid = {new_course_id}
+                                    ORDER BY id DESC LIMIT 1
+                                    """
+                                ))
+                                new_context_id = result.scalar()
+                                logger.debug(f"New context ID for course: {new_context_id}")
+
+                                path = f"/1/{context_category_id}/{new_context_id}"
+                                conn.execute(text(
+                                    f"""
+                                    UPDATE {context_table}
+                                    SET path = '{path}'
+                                    WHERE id = {new_context_id}
+                                    """
+                                ))
+                                logger.info(f"Context inserted for course {new_course_id} with path '{path}'.")
+
                         except Exception as e:
                             logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
 
