@@ -28,7 +28,7 @@ def get_unique_filename(output_dir: str) -> str:
         version += 1
 
 
-def load(dataframes: Dict[str, pd.DataFrame], new_engine, new_db):
+def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
     logger.debug(f"Starting the loading process...")
 
     output_dir = "src/loaded"
@@ -58,62 +58,62 @@ def load(dataframes: Dict[str, pd.DataFrame], new_engine, new_db):
                             course_copy = course.copy()
                             course_copy["category"] = 9
                             course_copy = course_copy.drop(columns=["id"])  # removing the old ID to generate a new one
+                            course_copy = course_copy.drop(columns=["originalcourseid"])
 
                             # inserting the modified course into the new database (need to adjust the logic behind adding a new course into the new db; other important and relevant tables are not being copied yet.)
-                            course_copy.to_sql(prefixed_table, new_engine, if_exists="append", index=False)
+                            course_copy.to_sql(prefixed_table, conn, if_exists="append", index=False)
                             logger.info(f"COURSE based on ID {id} inserted successfully!")
 
                             # inserting a context into the new database
                             # Recuperar o novo ID do curso
-                            with new_engine.begin() as conn:
-                                result = conn.execute(text(f"SELECT id FROM {prefixed_table} ORDER BY id DESC LIMIT 1"))
-                                new_course_id = result.scalar()
-                                logger.debug(f"New course ID: {new_course_id}")
+                            result = conn.execute(text(f"SELECT id FROM {prefixed_table} ORDER BY id DESC LIMIT 1"))
+                            new_course_id = result.scalar()
+                            logger.debug(f"New course ID: {new_course_id}")
 
-                                if not new_course_id:
-                                    raise ValueError("Failed to retrieve new course ID after insertion.")
+                            if not new_course_id:
+                                raise ValueError("Failed to retrieve new course ID after insertion.")
 
-                                category_id = course_copy["category"].iloc[0]
-                                result = conn.execute(text(
-                                    f"""
-                                    SELECT id FROM {context_table}
-                                    WHERE contextlevel = 40 AND instanceid = {category_id}
-                                    LIMIT 1
-                                    """
-                                ))
-                                context_category_id = result.scalar()
-                                logger.debug(f"Context category ID found: {context_category_id}")
+                            category_id = course_copy["category"].iloc[0]
+                            result = conn.execute(text(
+                                f"""
+                                SELECT id FROM {context_table}
+                                WHERE contextlevel = 40 AND instanceid = {category_id}
+                                LIMIT 1
+                                """
+                            ))
+                            context_category_id = result.scalar()
+                            logger.debug(f"Context category ID found: {context_category_id}")
 
-                                if not context_category_id:
-                                    raise ValueError(f"No context category found for instanceid {category_id}.")
+                            if not context_category_id:
+                                raise ValueError(f"No context category found for instanceid {category_id}.")
 
-                                logger.debug("Inserting context row...")
-                                conn.execute(text(
-                                    f"""
-                                    INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
-                                    VALUES (50, {new_course_id}, 3, NULL)
-                                    """
-                                ))
+                            logger.debug("Inserting context row...")
+                            conn.execute(text(
+                                f"""
+                                INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
+                                VALUES (50, {new_course_id}, 3, NULL)
+                                """
+                            ))
 
-                                result = conn.execute(text(
-                                    f"""
-                                    SELECT id FROM {context_table}
-                                    WHERE contextlevel = 50 AND instanceid = {new_course_id}
-                                    ORDER BY id DESC LIMIT 1
-                                    """
-                                ))
-                                new_context_id = result.scalar()
-                                logger.debug(f"New context ID for course: {new_context_id}")
+                            result = conn.execute(text(
+                                f"""
+                                SELECT id FROM {context_table}
+                                WHERE contextlevel = 50 AND instanceid = {new_course_id}
+                                ORDER BY id DESC LIMIT 1
+                                """
+                            ))
+                            new_context_id = result.scalar()
+                            logger.debug(f"New context ID for course: {new_context_id}")
 
-                                path = f"/1/{context_category_id}/{new_context_id}"
-                                conn.execute(text(
-                                    f"""
-                                    UPDATE {context_table}
-                                    SET path = '{path}'
-                                    WHERE id = {new_context_id}
-                                    """
-                                ))
-                                logger.info(f"Context inserted for course {new_course_id} with path '{path}'.")
+                            path = f"/1/{context_category_id}/{new_context_id}"
+                            conn.execute(text(
+                                f"""
+                                UPDATE {context_table}
+                                SET path = '{path}'
+                                WHERE id = {new_context_id}
+                                """
+                            ))
+                            logger.info(f"Context inserted for course {new_course_id} with path '{path}'.")
 
                         except Exception as e:
                             logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")

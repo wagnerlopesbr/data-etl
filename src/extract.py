@@ -5,7 +5,7 @@ from src.logging import start
 logger = start()
 
 
-def extract(engine, DB_PREFIX):
+def extract(conn, DB_PREFIX):
     logger.debug(f"Starting the extraction process...")
     
     queries = {
@@ -61,14 +61,13 @@ def extract(engine, DB_PREFIX):
         """
 
     dataframes = {}
-    with engine.connect() as connection:
-        for table, query in queries.items():
-            try:
-                logger.debug(f"Running query for '{table.upper()}'...")
-                df = pd.read_sql(query, connection)
-                logger.info(f"Extracted {len(df)} rows from {table.upper()}.")
-                dataframes[table] = df
-            except Exception as e:
-                logger.error(f"Error extracting {table.upper()}: {e}.")
+    for table, query in queries.items():
+        try:
+            logger.debug(f"Running query for '{table.upper()}'...")
+            df = pd.read_sql(query, conn)
+            logger.info(f"Extracted {len(df)} rows from {table.upper()}.")
+            dataframes[table] = df
+        except Exception as e:
+            logger.error(f"Error extracting {table.upper()}: {e}.")
     logger.info(f"End of extraction process.")
     return dataframes
