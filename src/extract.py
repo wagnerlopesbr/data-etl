@@ -13,6 +13,7 @@ def extract(conn, DB_PREFIX):
         "context_category": f"SELECT * FROM {DB_PREFIX}_context WHERE contextlevel = 40",
         "course_categories": f"SELECT * FROM {DB_PREFIX}_course_categories",
         "course": f"SELECT * FROM {DB_PREFIX}_course WHERE format <> 'site'",
+        "course_format_options": f"SELECT * FROM {DB_PREFIX}_course_format_options",
         "course_sections": f"SELECT * FROM {DB_PREFIX}_course_sections",
         "course_modules": f"SELECT * FROM {DB_PREFIX}_course_modules",
         "modules": f"SELECT * FROM {DB_PREFIX}_modules",
