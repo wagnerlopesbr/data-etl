@@ -35,9 +35,11 @@ def main():
     try:
         logger.debug("------------------------------------------ NEW ETL RUN ------------------------------------------")
         logger.debug("ETL process started...")
-        dataframes = extract(old_engine, old_db.prefix)
-        dataframes = transform(dataframes)
-        load(dataframes, new_engine, new_db)
+        
+        with old_engine.connect() as old_conn, new_engine.connect() as new_conn:
+            dataframes = extract(old_conn, old_db.prefix)
+            dataframes = transform(dataframes)
+            load(dataframes, new_conn, new_db)
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
