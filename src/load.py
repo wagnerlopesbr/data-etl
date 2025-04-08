@@ -36,6 +36,8 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
     os.makedirs(output_dir, exist_ok=True)
     output_path = get_unique_filename(output_dir)
     
+    module_instance_mapping = {}
+
     with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
         try:
             for table, df in dataframes.items():
@@ -127,8 +129,6 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                 """
                             ))
                             logger.info(f"Context inserted for course {new_course_id} with path '{path}'.")
-
-                            module_instance_mapping = {}
                             
                             if not course_modules_filtered_df.empty:
                                 logger.debug(f"Inserting {len(course_modules_filtered_df)} course_modules for course {new_course_id}.")
@@ -139,6 +139,8 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                 course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(lambda x: new_modules_map.get(old_modules_map.get(x)))
 
                                 # droping ids
+                                old_cm_ids = {}
+                                course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
                                 course_modules_filtered_df = course_modules_filtered_df.drop(columns=["id"])
 
                                 # inserting and maping new ids
@@ -154,14 +156,11 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                     row_dict = row_cleaned.to_dict()
                                     conn.execute(sql, row_dict)
 
-                                    ### focus on:
-                                    #old_cm_id = course_modules_df["id"]
-                                    #logger.info(f"old_cm_id: {old_cm_id}")
-
+                                    # Map the old cm_id to the new cm_id
+                                    old_cm_id = row["old_id"]
                                     new_cm_id = conn.execute(text(f"SELECT id FROM {course_modules_table} ORDER BY id DESC LIMIT 1")).scalar()
-                                    logger.info(f"new_cm_id: {new_cm_id}")
-                                    module_instance_mapping[row["instance"]] = new_cm_id
-                                    logger.info(f"OLD_MODULE_ID: NEW_MODULE_ID mapping: {module_instance_mapping}")
+                                    module_instance_mapping[old_cm_id] = new_cm_id
+                                    #logger.info(f"Mapping: {module_instance_mapping}")
 
                                     # create course_module context (contextlevel 70)
                                     conn.execute(text(f"""
@@ -190,22 +189,20 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                             if not course_sections_df.empty:
                                 logger.debug(f"Course {new_course_id} has {len(course_sections_df)} sections.")
                                 
-                                # Armazena a sequência original por índice da seção
                                 section_sequence_map = dict(zip(course_sections_df["section"], course_sections_df["sequence"]))
-                                logger.info(f"section_sequence_map: {section_sequence_map}")
+                                #logger.info(f"section_sequence_map: {section_sequence_map}")
                                 course_sections_df["course"] = new_course_id
                                 course_sections_df = course_sections_df.drop(columns=["id"])
                                 course_sections_df["sequence"] = course_sections_df["sequence"].apply(
-                                    lambda seq: transform_sequence(seq, conn, new_course_id)
+                                    lambda seq: transform_sequence(seq, module_instance_mapping)
                                 )
 
-                                # Verifique se a sequência foi transformada corretamente
-                                logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
+                                #logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
 
                                 course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
                                 logger.info(f"{len(course_sections_df)} section(s) inserted for course {new_course_id}.")
 
-                                # Buscar os novos IDs das sections
+                                # get new sections ids
                                 result = conn.execute(text(
                                     f"""
                                     SELECT id, section FROM {sections_table}
@@ -214,21 +211,19 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                     """
                                 ), {"course_id": new_course_id}).mappings().fetchall()
 
-                                # Mapear section index original para novo ID
                                 old_to_new_section_ids = {row["section"]: row["id"] for row in result}
-                                logger.debug(f"Section ID mapping: {old_to_new_section_ids}")
+                                #logger.debug(f"Section ID mapping: {old_to_new_section_ids}")
 
-                                # Atualizar os valores de section em course_modules
                                 course_modules_filtered_df["section"] = course_modules_filtered_df["section"].map(old_to_new_section_ids)
 
-                                for old_section_index, sequence_str in section_sequence_map.items():
-                                    new_section_id = old_to_new_section_ids.get(old_section_index)
-                                    if new_section_id:
-                                        new_sequence = transform_sequence(sequence_str, conn, new_course_id)
-                                        conn.execute(text(
-                                            f"UPDATE {sections_table} SET sequence = :sequence WHERE id = :id"
-                                        ), {"sequence": new_sequence, "id": new_section_id})
-                                        logger.debug(f"Updated section {new_section_id} with sequence '{new_sequence}'.")
+                                section_to_sequence_mapping = {}
+
+                                # Iterate over the old_to_new_section_ids and match it with the sequence values
+                                for old_section_index, new_section_id in old_to_new_section_ids.items():
+                                    sequence_value = section_sequence_map.get(old_section_index, '')
+                                    section_to_sequence_mapping[new_section_id] = sequence_value
+
+                                #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
 
                                 logger.info("All course_sections updated with correct sequences.")
 
