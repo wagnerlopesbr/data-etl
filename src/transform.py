@@ -41,40 +41,22 @@ def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def transform_sequence(sequence_str, conn, course_id):
-    if pd.isna(sequence_str) or sequence_str == "":  # Verifica se a sequência é vazia ou nula
-        return sequence_str  # Retorna a sequência original (NULL ou vazio) sem transformação
+def transform_sequence(sequence_str, map):
+    if pd.isna(sequence_str) or sequence_str == "":
+        return sequence_str
     
-    # Divida a sequência original em IDs antigos
     old_ids = sequence_str.split(",")
-    new_ids = []  # Lista para armazenar os novos IDs
+    new_ids = []
 
-    # Buscar o mapeamento dos IDs antigos para novos do banco de dados
-    old_to_new_ids = {}
-
-    # Buscando o mapeamento para os course_modules (você pode otimizar isso dependendo do banco)
-    result = conn.execute(text(f"""
-        SELECT cm.id AS old_id, cm.module AS module_id
-        FROM mdl_course_modules cm
-        WHERE cm.course = :course_id
-    """), {"course_id": course_id}).mappings().fetchall()
-
-    # Gerar um dicionário de mapeamento de IDs antigos para novos
-    for row in result:
-        old_to_new_ids[row["old_id"]] = row["module_id"]
-
-    # Agora, para cada ID antigo, buscamos o novo
     for old_id in old_ids:
-        old_id = old_id.strip()  # Remove espaços extras ao redor do ID
-        if not old_id:  # Ignora valores vazios (caso existam valores vazios na sequência)
-            new_ids.append("")  # Adiciona uma string vazia para valores vazios
+        old_id = old_id.strip()
+        if not old_id:
+            new_ids.append("")
             continue
-        
-        # Aqui substituímos o old_id pelo novo ID usando o mapeamento
-        new_id = old_to_new_ids.get(int(old_id), old_id)  # Caso não encontre o mapeamento, mantém o original
-        new_ids.append(str(new_id))  # Adiciona o novo ID à lista
 
-    # Retorna a nova sequência com os novos IDs
+        new_id = map.get(int(old_id), old_id)
+        new_ids.append(str(new_id))
+
     return ",".join(new_ids)
 
 
