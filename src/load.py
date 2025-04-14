@@ -56,7 +56,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                     course_modules_table = f"{new_db.prefix}_course_modules"
                     course_format_options_table = f"{new_db.prefix}_course_format_options"
 
-                    ids = [53, 400]
+                    ids = [399, 53, 400]
                     for id in ids:
                         sections_df = dataframes.get("course_sections", pd.DataFrame())
                         course_sections_df = sections_df[sections_df["course"] == id].copy()
@@ -68,7 +68,6 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                         course_modules_filtered_df = course_modules_df[course_modules_df["course"] == id].copy()
                         course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
                         course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
-
 
                         # migrating one course from old to new db
                         course = df[df["id"] == id]
@@ -164,7 +163,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                         old_cm_id = row["old_id"]
                                         new_cm_id = conn.execute(text(f"SELECT id FROM {course_modules_table} ORDER BY id DESC LIMIT 1")).scalar()
                                         module_instance_mapping[old_cm_id] = new_cm_id
-                                        logger.info(f"Mapping: {module_instance_mapping}")
+                                        #logger.info(f"Mapping: {module_instance_mapping}")
 
                                         # create course_module context (contextlevel 70)
                                         conn.execute(text(f"""
@@ -220,19 +219,18 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                     new_section_ids = [row["id"] for row in result]
                                     section_id_mapping = {0: 0}
                                     section_id_mapping.update(dict(zip(old_section_ids, new_section_ids)))
-                                    logger.debug(f"Section ID mapping: {section_id_mapping}")
+                                    #logger.debug(f"Section ID mapping: {section_id_mapping}")
 
                                     old_to_new_section_ids = {row["section"]: row["id"] for row in result}
 
-                                    # Mapeia os sectionid diretamente do id antigo para o novo
-                                    logger.debug(f"course_format_options_filtered before .map: {course_format_options_filtered}")
-                                    # 🔁 Mapeia os sectionid diretamente, tratando sectionid = 0 corretamente
+                                    # mapping new sectionids directly from old id
+                                    #logger.debug(f"course_format_options_filtered before .map: {course_format_options_filtered}")
                                     course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].fillna(-1).astype(int)
                                     course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].map(
                                         lambda sid: section_id_mapping.get(sid) if sid > 0 else 0
                                     )
                                     course_format_options_filtered["courseid"] = new_course_id
-                                    logger.debug(f"course_format_options_filtered after .map: {course_format_options_filtered}")
+                                    #logger.debug(f"course_format_options_filtered after .map: {course_format_options_filtered}")
 
                                     course_modules_filtered_df["section"] = course_modules_filtered_df["section"].map(old_to_new_section_ids)
 
@@ -243,18 +241,16 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                                         sequence_value = section_sequence_map.get(old_section_index, '')
                                         section_to_sequence_mapping[new_section_id] = sequence_value
 
-                                    logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
+                                    #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
 
                                     logger.info("All course_sections updated with correct sequences.")
 
                                 if not course_format_options_filtered.empty:
                                     logger.debug(f"Inserting {len(course_format_options_filtered)} course_format_options for course {new_course_id}.")
 
-                                    # 🔍 Diagnóstico: log das chaves do mapeamento e sectionid únicos no DataFrame
                                     #logger.debug(f"section_id_mapping keys: {list(section_id_mapping.keys())}")
                                     #logger.debug(f"Unique sectionid values before mapping: {course_format_options_filtered['sectionid'].unique().tolist()}")
 
-                                    # 🛠️ Forçar tipo inteiro confiável para mapeamento
                                     course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].astype("Int64")  # Pandas nullable int
 
                                     logger.info(f"Final format_options to insert: {len(course_format_options_filtered)}")
