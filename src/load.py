@@ -69,7 +69,6 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                         course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
                         course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
 
-
                         # migrating one course from old to new db
                         course = df[df["id"] == id]
                         if course.empty:
