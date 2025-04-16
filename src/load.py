@@ -18,6 +18,211 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 
 
+def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
+    prefixed_table = f"{new_db.prefix}_{table}"
+    context_table = f"{new_db.prefix}_context"
+    sections_table = f"{new_db.prefix}_course_sections"
+    modules_table = f"{new_db.prefix}_modules"
+    course_modules_table = f"{new_db.prefix}_course_modules"
+    course_format_options_table = f"{new_db.prefix}_course_format_options"
+
+    module_instance_mapping = {}
+
+    for id in ids:
+        course_df = dataframes.get("course", pd.DataFrame())
+        sections_df = dataframes.get("course_sections", pd.DataFrame())
+        course_sections_df = sections_df[sections_df["course"] == id].copy()
+        modules_df = dataframes.get("modules", pd.DataFrame())
+        course_modules_df = dataframes.get("course_modules", pd.DataFrame())
+        old_modules_map = dict(zip(modules_df["id"], modules_df["name"]))
+        old_modules_result = conn.execute(text(f"SELECT id, name FROM {modules_table}")).mappings()
+        new_modules_map = {row["name"]: row["id"] for row in old_modules_result}
+        course_modules_filtered_df = course_modules_df[course_modules_df["course"] == id].copy()
+        course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
+        course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
+
+        course = course_df[course_df["id"] == id]
+        if course.empty:
+            logger.warning(f"No row(s) found in 'COURSE' with id {id}.")
+        else:
+            try:
+                course_copy = course.copy()
+                course_copy["category"] = category
+                course_copy = course_copy.drop(columns=["id", "originalcourseid"])
+
+                # course
+                course_copy.to_sql(prefixed_table, conn, if_exists="append", index=False)
+                new_course = conn.execute(text(f"SELECT id FROM {prefixed_table} ORDER BY id DESC LIMIT 1"))
+                new_course_id = new_course.scalar()
+                logger.info(f"NEW COURSE inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
+
+                # category
+                category_id = course_copy["category"].iloc[0]
+                result = conn.execute(text(
+                    f"""
+                    SELECT id FROM {context_table}
+                    WHERE contextlevel = 40 AND instanceid = {category_id}
+                    LIMIT 1
+                    """
+                ))
+                context_category_id = result.scalar()
+
+                # create course context (contextlevel 50)
+                conn.execute(text(
+                    f"""
+                    INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
+                    VALUES (50, {new_course_id}, 3, NULL)
+                    """
+                ))
+                result = conn.execute(text(
+                    f"""
+                    SELECT id FROM {context_table}
+                    WHERE contextlevel = 50 AND instanceid = {new_course_id}
+                    ORDER BY id DESC LIMIT 1
+                    """
+                ))
+                new_course_context_id = result.scalar()
+                logger.info(f"NEW COURSE CONTEXT ID inserted successfully! NEW COURSE CONTEXT ID: {new_course_context_id}")
+                path = f"/1/{context_category_id}/{new_course_context_id}"
+                conn.execute(text(
+                    f"""
+                    UPDATE {context_table}
+                    SET path = '{path}'
+                    WHERE id = {new_course_context_id}
+                    """
+                ))
+
+                if not course_modules_filtered_df.empty:
+                    course_modules_filtered_df["course"] = new_course_id
+                    # changing the module ids
+                    course_modules_filtered_df["module'"] = course_modules_filtered_df["module"].map(
+                        lambda func: new_modules_map.get(old_modules_map.get(func))
+                    )
+                    # storing old ids
+                    course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
+                    # droping old ids
+                    course_modules_filtered_df = course_modules_filtered_df.drop(columns=["id"])
+
+                    # inserting and maping new modules ids
+                    for _, row in course_modules_filtered_df.iterrows():
+                        sql = text(f"""
+                                    INSERT INTO {course_modules_table} 
+                                    (course, module, instance, section, added, score, indent, visible, visibleold, groupmode, groupingid, completion, completiongradeitemnumber, completionview, completionexpected, availability, showdescription)
+                                    VALUES
+                                    (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
+                                    """
+                        )
+                        row_cleaned = row.replace({pd.NA: None, '': None}).where(pd.notnull(row), None)
+                        row_dict = row_cleaned.to_dict()
+                        conn.execute(sql, row_dict)
+
+                        # Map the old cm_id to the new cm_id
+                        old_cm_id = row["old_id"]
+                        new_cm_id = conn.execute(text(f"SELECT id FROM {course_modules_table} ORDER BY id DESC LIMIT 1")).scalar()
+                        module_instance_mapping[old_cm_id] = new_cm_id
+
+                        # create course_module context (contextlevel 70)
+                        conn.execute(text(
+                            f"""
+                            INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
+                            VALUES (70, :instanceid, 4, NULL)
+                            """),
+                            {"instanceid": new_cm_id})
+
+                        # retrieve new context.id
+                        result = conn.execute(text(
+                            f"""
+                            SELECT id FROM {context_table}
+                            WHERE contextlevel = 70 AND instanceid = :instanceid
+                            ORDER BY id DESC LIMIT 1
+                            """),
+                            {"instanceid": new_cm_id})
+                        
+                        new_cm_context_id = result.scalar()
+
+                        # update context path
+                        path_cm = f"/1/{context_category_id}/{new_course_context_id}/{new_cm_context_id}"
+                        conn.execute(text(
+                            f"""
+                            UPDATE {context_table}
+                            SET path = :path
+                            WHERE id = :id
+                            """),
+                            {"path": path_cm, "id": new_cm_context_id})
+                    logger.info(f"{len(course_modules_filtered_df)} course_modules inserted.")
+
+                if not course_sections_df.empty:
+                    #logger.debug(f"Course {new_course_id} has {len(course_sections_df)} sections.")
+                                        
+                    section_sequence_map = dict(zip(course_sections_df["section"], course_sections_df["sequence"]))
+                    #logger.info(f"section_sequence_map: {section_sequence_map}")
+                    course_sections_df["course"] = new_course_id
+                    old_section_ids = course_sections_df["id"].tolist()
+                    old_section_index_to_id = dict(zip(course_sections_df["section"], course_sections_df["id"]))
+                    course_sections_df = course_sections_df.drop(columns=["id"])
+                    course_sections_df["sequence"] = course_sections_df["sequence"].apply(
+                        lambda seq: transform_sequence(seq, module_instance_mapping)
+                    )
+
+                    #logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
+
+                    course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
+                    logger.info(f"{len(course_sections_df)} section(s) inserted for course {new_course_id}.")
+
+                    # get new sections ids
+                    result = conn.execute(text(
+                        f"""
+                        SELECT id, section FROM {sections_table}
+                        WHERE course = :course_id
+                        """
+                    ), {"course_id": new_course_id}).mappings().fetchall()
+
+                    new_section_ids = [row["id"] for row in result]
+                    section_id_mapping = {0: 0}
+                    section_id_mapping.update(dict(zip(old_section_ids, new_section_ids)))
+                    #logger.debug(f"Section ID mapping: {section_id_mapping}")
+
+                    old_to_new_section_ids = {row["section"]: row["id"] for row in result}
+
+                    # mapping new sectionids directly from old id
+                    #logger.debug(f"course_format_options_filtered before .map: {course_format_options_filtered}")
+                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].fillna(-1).astype(int)
+                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].map(
+                        lambda sid: section_id_mapping.get(sid) if sid > 0 else 0
+                    )
+                    course_format_options_filtered["courseid"] = new_course_id
+                    #logger.debug(f"course_format_options_filtered after .map: {course_format_options_filtered}")
+
+                    course_modules_filtered_df["section"] = course_modules_filtered_df["section"].map(old_to_new_section_ids)
+
+                    section_to_sequence_mapping = {}
+
+                    # Iterate over the old_to_new_section_ids and match it with the sequence values
+                    for old_section_index, new_section_id in old_to_new_section_ids.items():
+                        sequence_value = section_sequence_map.get(old_section_index, '')
+                        section_to_sequence_mapping[new_section_id] = sequence_value
+
+                    #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
+
+                    logger.info("All course_sections updated with correct sequences.")
+
+                if not course_format_options_filtered.empty:
+                    logger.debug(f"Inserting {len(course_format_options_filtered)} course_format_options for course {new_course_id}.")
+
+                    #logger.debug(f"section_id_mapping keys: {list(section_id_mapping.keys())}")
+                    #logger.debug(f"Unique sectionid values before mapping: {course_format_options_filtered['sectionid'].unique().tolist()}")
+
+                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].astype("Int64")  # Pandas nullable int
+
+                    logger.info(f"Final format_options to insert: {len(course_format_options_filtered)}")
+                    course_format_options_filtered.to_sql(course_format_options_table, conn, if_exists="append", index=False)
+                    logger.info(f"{len(course_format_options_filtered)} course_format_options inserted.")
+                else:
+                    logger.warning(f"No course_format_options found for course ID {id}.")
+            except Exception as e:
+                logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
+
+
 def get_unique_filename(output_dir: str) -> str:
     date_str = datetime.datetime.now().strftime("%m_%d_%Y")
     version = 1
@@ -35,8 +240,6 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
     output_dir = "src/loaded"
     os.makedirs(output_dir, exist_ok=True)
     output_path = get_unique_filename(output_dir)
-    
-    module_instance_mapping = {}
 
     with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
         try:
@@ -49,218 +252,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    prefixed_table = f"{new_db.prefix}_{table}"
-                    context_table = f"{new_db.prefix}_context"
-                    sections_table = f"{new_db.prefix}_course_sections"
-                    modules_table = f"{new_db.prefix}_modules"
-                    course_modules_table = f"{new_db.prefix}_course_modules"
-                    course_format_options_table = f"{new_db.prefix}_course_format_options"
-
-                    ids = [399, 53, 400]
-                    for id in ids:
-                        sections_df = dataframes.get("course_sections", pd.DataFrame())
-                        course_sections_df = sections_df[sections_df["course"] == id].copy()
-                        modules_df = dataframes.get("modules", pd.DataFrame())
-                        course_modules_df = dataframes.get("course_modules", pd.DataFrame())
-                        old_modules_map = dict(zip(modules_df["id"], modules_df["name"]))
-                        old_modules_result = conn.execute(text(f"SELECT id, name FROM {modules_table}")).mappings()
-                        new_modules_map = {row["name"]: row["id"] for row in old_modules_result}
-                        course_modules_filtered_df = course_modules_df[course_modules_df["course"] == id].copy()
-                        course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
-                        course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
-
-                        # migrating one course from old to new db
-                        course = df[df["id"] == id]
-                        if course.empty:
-                            logger.warning(f"No row(s) found in 'COURSE' with id {id}.")
-                        else:
-                            try:
-                                course_copy = course.copy()
-                                course_copy["category"] = 1 # QSMS id
-                                course_copy = course_copy.drop(columns=["id"])  # removing the old ID to generate a new one
-                                course_copy = course_copy.drop(columns=["originalcourseid"])
-
-                                # inserting the modified course into the new database (need to adjust the logic behind adding a new course into the new db; other important and relevant tables are not being copied yet.)
-                                course_copy.to_sql(prefixed_table, conn, if_exists="append", index=False)
-                                logger.info(f"COURSE based on ID {id} inserted successfully!")
-
-                                # inserting a context into the new database
-                                result = conn.execute(text(f"SELECT id FROM {prefixed_table} ORDER BY id DESC LIMIT 1"))
-                                new_course_id = result.scalar()
-                                logger.debug(f"New course ID: {new_course_id}")
-
-                                if not new_course_id:
-                                    raise ValueError("Failed to retrieve new course ID after insertion.")
-
-                                category_id = course_copy["category"].iloc[0]
-                                result = conn.execute(text(
-                                    f"""
-                                    SELECT id FROM {context_table}
-                                    WHERE contextlevel = 40 AND instanceid = {category_id}
-                                    LIMIT 1
-                                    """
-                                ))
-                                context_category_id = result.scalar()
-                                logger.debug(f"Context category ID found: {context_category_id}")
-
-                                if not context_category_id:
-                                    raise ValueError(f"No context category found for instanceid {category_id}.")
-
-                                logger.debug("Inserting context row...")
-                                conn.execute(text(
-                                    f"""
-                                    INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
-                                    VALUES (50, {new_course_id}, 3, NULL)
-                                    """
-                                ))
-
-                                result = conn.execute(text(
-                                    f"""
-                                    SELECT id FROM {context_table}
-                                    WHERE contextlevel = 50 AND instanceid = {new_course_id}
-                                    ORDER BY id DESC LIMIT 1
-                                    """
-                                ))
-                                new_context_id = result.scalar()
-                                logger.debug(f"New context ID for course: {new_context_id}")
-
-                                path = f"/1/{context_category_id}/{new_context_id}"
-                                conn.execute(text(
-                                    f"""
-                                    UPDATE {context_table}
-                                    SET path = '{path}'
-                                    WHERE id = {new_context_id}
-                                    """
-                                ))
-                                logger.info(f"Context inserted for course {new_course_id} with path '{path}'.")
-                                
-                                if not course_modules_filtered_df.empty:
-                                    logger.debug(f"Inserting {len(course_modules_filtered_df)} course_modules for course {new_course_id}.")
-
-                                    course_modules_filtered_df["course"] = new_course_id
-                                    
-                                    # changing the module ids
-                                    course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(lambda x: new_modules_map.get(old_modules_map.get(x)))
-
-                                    # droping ids
-                                    course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
-                                    course_modules_filtered_df = course_modules_filtered_df.drop(columns=["id"])
-
-                                    # inserting and maping new ids
-                                    for _, row in course_modules_filtered_df.iterrows():
-                                        sql = text(f"""
-                                                    INSERT INTO {course_modules_table} 
-                                                    (course, module, instance, section, added, score, indent, visible, visibleold, groupmode, groupingid, completion, completiongradeitemnumber, completionview, completionexpected, availability, showdescription)
-                                                    VALUES
-                                                    (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
-                                                    """
-                                        )
-                                        row_cleaned = row.replace({pd.NA: None, '': None}).where(pd.notnull(row), None)
-                                        row_dict = row_cleaned.to_dict()
-                                        conn.execute(sql, row_dict)
-
-                                        # Map the old cm_id to the new cm_id
-                                        old_cm_id = row["old_id"]
-                                        new_cm_id = conn.execute(text(f"SELECT id FROM {course_modules_table} ORDER BY id DESC LIMIT 1")).scalar()
-                                        module_instance_mapping[old_cm_id] = new_cm_id
-                                        #logger.info(f"Mapping: {module_instance_mapping}")
-
-                                        # create course_module context (contextlevel 70)
-                                        conn.execute(text(f"""
-                                            INSERT INTO {context_table} (contextlevel, instanceid, depth, path)
-                                            VALUES (70, :instanceid, 4, NULL)
-                                        """), {"instanceid": new_cm_id})
-
-                                        # retrieve new context.id
-                                        result = conn.execute(text(f"""
-                                            SELECT id FROM {context_table}
-                                            WHERE contextlevel = 70 AND instanceid = :instanceid
-                                            ORDER BY id DESC LIMIT 1
-                                        """), {"instanceid": new_cm_id})
-                                        new_cm_context_id = result.scalar()
-
-                                        # update context path
-                                        path_cm = f"/1/{context_category_id}/{new_context_id}/{new_cm_context_id}"
-                                        conn.execute(text(f"""
-                                            UPDATE {context_table}
-                                            SET path = :path
-                                            WHERE id = :id
-                                        """), {"path": path_cm, "id": new_cm_context_id})
-
-                                    logger.info(f"{len(course_modules_filtered_df)} course_modules inserted.")
-
-                                if not course_sections_df.empty:
-                                    logger.debug(f"Course {new_course_id} has {len(course_sections_df)} sections.")
-                                    
-                                    section_sequence_map = dict(zip(course_sections_df["section"], course_sections_df["sequence"]))
-                                    logger.info(f"section_sequence_map: {section_sequence_map}")
-                                    course_sections_df["course"] = new_course_id
-                                    old_section_ids = course_sections_df["id"].tolist()
-                                    old_section_index_to_id = dict(zip(course_sections_df["section"], course_sections_df["id"]))
-                                    course_sections_df = course_sections_df.drop(columns=["id"])
-                                    course_sections_df["sequence"] = course_sections_df["sequence"].apply(
-                                        lambda seq: transform_sequence(seq, module_instance_mapping)
-                                    )
-
-                                    logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
-
-                                    course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
-                                    logger.info(f"{len(course_sections_df)} section(s) inserted for course {new_course_id}.")
-
-
-                                    # get new sections ids
-                                    result = conn.execute(text(
-                                        f"""
-                                        SELECT id, section FROM {sections_table}
-                                        WHERE course = :course_id
-                                        """
-                                    ), {"course_id": new_course_id}).mappings().fetchall()
-
-                                    new_section_ids = [row["id"] for row in result]
-                                    section_id_mapping = {0: 0}
-                                    section_id_mapping.update(dict(zip(old_section_ids, new_section_ids)))
-                                    #logger.debug(f"Section ID mapping: {section_id_mapping}")
-
-                                    old_to_new_section_ids = {row["section"]: row["id"] for row in result}
-
-                                    # mapping new sectionids directly from old id
-                                    #logger.debug(f"course_format_options_filtered before .map: {course_format_options_filtered}")
-                                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].fillna(-1).astype(int)
-                                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].map(
-                                        lambda sid: section_id_mapping.get(sid) if sid > 0 else 0
-                                    )
-                                    course_format_options_filtered["courseid"] = new_course_id
-                                    #logger.debug(f"course_format_options_filtered after .map: {course_format_options_filtered}")
-
-                                    course_modules_filtered_df["section"] = course_modules_filtered_df["section"].map(old_to_new_section_ids)
-
-                                    section_to_sequence_mapping = {}
-
-                                    # Iterate over the old_to_new_section_ids and match it with the sequence values
-                                    for old_section_index, new_section_id in old_to_new_section_ids.items():
-                                        sequence_value = section_sequence_map.get(old_section_index, '')
-                                        section_to_sequence_mapping[new_section_id] = sequence_value
-
-                                    #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
-
-                                    logger.info("All course_sections updated with correct sequences.")
-
-                                if not course_format_options_filtered.empty:
-                                    logger.debug(f"Inserting {len(course_format_options_filtered)} course_format_options for course {new_course_id}.")
-
-                                    #logger.debug(f"section_id_mapping keys: {list(section_id_mapping.keys())}")
-                                    #logger.debug(f"Unique sectionid values before mapping: {course_format_options_filtered['sectionid'].unique().tolist()}")
-
-                                    course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].astype("Int64")  # Pandas nullable int
-
-                                    logger.info(f"Final format_options to insert: {len(course_format_options_filtered)}")
-                                    course_format_options_filtered.to_sql(course_format_options_table, conn, if_exists="append", index=False)
-                                    logger.info(f"{len(course_format_options_filtered)} course_format_options inserted.")
-                                else:
-                                    logger.warning(f"No course_format_options found for course ID {id}.")
-
-                            except Exception as e:
-                                logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
+                    if_table_course(conn, table, ids=[399, 53, 400], dataframes=dataframes, category=1, new_db=new_db)
 
                 if table == "choice":
                     if_table_choice(table, df)
