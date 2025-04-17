@@ -26,6 +26,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     course_modules_table = f"{new_db.prefix}_course_modules"
     course_format_options_table = f"{new_db.prefix}_course_format_options"
     page_table = f"{new_db.prefix}_page"
+    label_table = f"{new_db.prefix}_label"
+    url_table = f"{new_db.prefix}_url"
+    resource_table = f"{new_db.prefix}_resource"
+    quiz_table = f"{new_db.prefix}_quiz"
 
     module_instance_mapping = {}
 
@@ -42,6 +46,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
         course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
         page_df = dataframes.get("page", pd.DataFrame())
+        label_df = dataframes.get("label", pd.DataFrame())
+        url_df = dataframes.get("url", pd.DataFrame())
+        resource_df = dataframes.get("resource", pd.DataFrame())
+        quiz_df = dataframes.get("quiz", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -160,7 +168,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     #logger.info(f"section_sequence_map: {section_sequence_map}")
                     course_sections_df["course"] = new_course_id
                     old_section_ids = course_sections_df["id"].tolist()
-                    old_section_index_to_id = dict(zip(course_sections_df["section"], course_sections_df["id"]))
                     course_sections_df = course_sections_df.drop(columns=["id"])
                     course_sections_df["sequence"] = course_sections_df["sequence"].apply(
                         lambda seq: transform_sequence(seq, module_instance_mapping)
@@ -226,6 +233,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     page_filtered = page_df[page_df["course"] == id].copy()
                     if not page_filtered.empty:
                         page_filtered["course"] = new_course_id
+                        page_filtered = page_filtered.drop(columns=["id"])
                         if "content_link" in page_filtered.columns:
                             page_filtered = page_filtered.drop(columns=["content_link"])
                         try:
@@ -235,6 +243,58 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting PAGE for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No PAGE entries found for course {id}.")
+                
+                if not label_df.empty:
+                    label_filtered = label_df[label_df["course"] == id].copy()
+                    if not label_filtered.empty:
+                        label_filtered["course"] = new_course_id
+                        label_filtered = label_filtered.drop(columns=["id"])
+                        try:
+                            label_filtered.to_sql(label_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(label_filtered)} label(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting LABEL for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No LABEL entries found for course {id}.")
+                
+                if not url_df.empty:
+                    url_filtered = url_df[url_df["course"] == id].copy()
+                    if not url_filtered.empty:
+                        url_filtered["course"] = new_course_id
+                        url_filtered = url_filtered.drop(columns=["id"])
+                        try:
+                            url_filtered.to_sql(url_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(url_filtered)} url(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting URL for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No URL entries found for course {id}.")
+                
+                if not resource_df.empty:
+                    resource_filtered = resource_df[resource_df["course"] == id].copy()
+                    if not resource_filtered.empty:
+                        resource_filtered["course"] = new_course_id
+                        resource_filtered = resource_filtered.drop(columns=["id"])
+                        try:
+                            resource_filtered.to_sql(resource_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(resource_filtered)} resource(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting RESOURCE for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No RESOURCE entries found for course {id}.")
+                
+                if not quiz_df.empty:
+                    quiz_filtered = quiz_df[quiz_df["course"] == id].copy()
+                    if not quiz_filtered.empty:
+                        quiz_filtered["course"] = new_course_id
+                        quiz_filtered = quiz_filtered.drop(columns=["id", "completionpass"])
+                        try:
+                            quiz_filtered.to_sql(quiz_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(quiz_filtered)} quiz(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUIZ for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No QUIZ entries found for course {id}.")
 
             except Exception as e:
                 logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
