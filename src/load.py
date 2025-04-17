@@ -25,6 +25,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     modules_table = f"{new_db.prefix}_modules"
     course_modules_table = f"{new_db.prefix}_course_modules"
     course_format_options_table = f"{new_db.prefix}_course_format_options"
+    page_table = f"{new_db.prefix}_page"
 
     module_instance_mapping = {}
 
@@ -40,6 +41,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         course_modules_filtered_df = course_modules_df[course_modules_df["course"] == id].copy()
         course_format_options_df = dataframes.get("course_format_options", pd.DataFrame())
         course_format_options_filtered = course_format_options_df[course_format_options_df["courseid"] == id].copy()
+        page_df = dataframes.get("page", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -219,6 +221,21 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     logger.info(f"{len(course_format_options_filtered)} course_format_options inserted.")
                 else:
                     logger.warning(f"No course_format_options found for course ID {id}.")
+                
+                if not page_df.empty:
+                    page_filtered = page_df[page_df["course"] == id].copy()
+                    if not page_filtered.empty:
+                        page_filtered["course"] = new_course_id
+                        if "content_link" in page_filtered.columns:
+                            page_filtered = page_filtered.drop(columns=["content_link"])
+                        try:
+                            page_filtered.to_sql(page_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(page_filtered)} page(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting PAGE for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No PAGE entries found for course {id}.")
+
             except Exception as e:
                 logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
 
