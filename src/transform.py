@@ -80,6 +80,14 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
 
     logger.info("Sections and related course_modules removed successfully.")
 
+    #rename_map = {
+    #    "avaliações finais": "avaliação",
+    #    "final assessments": "assessment"
+    #}
+    
+    #dataframes["course_sections"]["name"] = dataframes["course_sections"]["name"].replace(rename_map)
+    #logger.info("Renamed specific section names: 'avaliações finais' -> 'avaliação', 'final assessments' -> 'assessment'.")
+
     return dataframes
 
 
@@ -100,6 +108,16 @@ def transform_sequence(sequence_str, map):
         new_ids.append(str(new_id))
 
     return ",".join(new_ids)
+
+
+def transform_quiz(df: pd.DataFrame) -> pd.DataFrame:
+    logger.debug(f"Removing 'Avaliação Inicial' from QUIZ table...")
+    df = df.copy()
+    before = len(df)
+    df = df[~df["name"].isin(["Avaliação Inicial", "Initial Assessment"])]
+    after = len(df)
+    logger.info(f"Removed {before - after} quiz entries named 'Avaliação Inicial' or 'Initial Assessment'.")
+    return df
 
 
 def transform(dataframes):
@@ -124,6 +142,11 @@ def transform(dataframes):
     
     dataframes = transform_sections(dataframes)
 
+    if "quiz" in dataframes:
+        try:
+            dataframes["quiz"] = transform_quiz(dataframes["quiz"])
+        except Exception as e:
+            logger.error(f"Error transforming QUIZ: {e}")
 
     logger.info("End of transforming process.")
     return dataframes

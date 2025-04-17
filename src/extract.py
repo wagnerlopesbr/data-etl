@@ -22,6 +22,8 @@ def extract(conn, DB_PREFIX):
         "quiz": f"SELECT * FROM {DB_PREFIX}_quiz",
         "url": f"SELECT * FROM {DB_PREFIX}_url",
         "forum": f"SELECT * FROM {DB_PREFIX}_forum",
+        "label": f"SELECT * FROM {DB_PREFIX}_label",
+        "resource": f"SELECT * FROM {DB_PREFIX}_resource",
         "reengagement": f"SELECT * FROM {DB_PREFIX}_reengagement",
         "course_format_options": f"SELECT * FROM {DB_PREFIX}_course_format_options ORDER BY sectionid ASC",
         "course_modules_sections": f"""
