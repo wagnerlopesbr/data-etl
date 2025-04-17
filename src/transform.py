@@ -1,3 +1,4 @@
+from typing import Dict
 import re
 import html
 import pandas as pd
@@ -41,6 +42,47 @@ def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+    logger.debug("Filtering out 'Avaliação Inicial' and 'Initial Assessment' from course_sections...")
+
+    sections_df = dataframes.get("course_sections", pd.DataFrame())
+    modules_df = dataframes.get("course_modules", pd.DataFrame())
+    cfo_df = dataframes.get("course_format_options", pd.DataFrame())
+
+    if sections_df.empty or modules_df.empty:
+        logger.warning("course_sections or course_modules is empty. Skipping transform_sections.")
+        return dataframes
+
+    to_remove_sections = sections_df[sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment"])].copy()
+
+    if to_remove_sections.empty:
+        logger.info("No sections found for removal.")
+        return dataframes
+
+    logger.info(f"Found {len(to_remove_sections)} sections to remove.")
+
+    module_ids_to_remove = set()
+    for sequence in to_remove_sections["sequence"].dropna():
+        module_ids = str(sequence).split(",")
+        module_ids_to_remove.update(int(mid) for mid in module_ids if mid.isdigit())
+
+    logger.info(f"Identified {len(module_ids_to_remove)} module(s) to remove based on removed sections.")
+
+    dataframes["course_sections"] = sections_df[~sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment"])].copy()
+    dataframes["course_modules"] = modules_df[~modules_df["id"].isin(module_ids_to_remove)].copy()
+
+    if not cfo_df.empty:
+        section_ids_to_remove = to_remove_sections["id"].tolist()
+        before_count = len(cfo_df)
+        dataframes["course_format_options"] = cfo_df[~cfo_df["sectionid"].isin(section_ids_to_remove)].copy()
+        after_count = len(dataframes["course_format_options"])
+        logger.info(f"Removed {before_count - after_count} course_format_options related to removed sections.")
+
+    logger.info("Sections and related course_modules removed successfully.")
+
+    return dataframes
+
+
 def transform_sequence(sequence_str, map):
     if pd.isna(sequence_str) or sequence_str == "":
         return sequence_str
@@ -79,6 +121,9 @@ def transform(dataframes):
             dataframes["choice"] = transform_choice(dataframes["choice"])
         except Exception as e:
             logger.error(f"Error transforming CHOICE: {e}.")
+    
+    dataframes = transform_sections(dataframes)
+
 
     logger.info("End of transforming process.")
     return dataframes

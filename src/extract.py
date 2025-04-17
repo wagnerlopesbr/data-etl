@@ -14,7 +14,6 @@ def extract(conn, DB_PREFIX):
         "course_categories": f"SELECT * FROM {DB_PREFIX}_course_categories",
         "course": f"SELECT * FROM {DB_PREFIX}_course WHERE format <> 'site'",
         "course_sections": f"SELECT * FROM {DB_PREFIX}_course_sections ORDER BY section ASC",
-        #"course_sections": f"SELECT * FROM {DB_PREFIX}_course_sections WHERE name NOT IN ('Avaliação Inicial', 'Initial Assessment') ORDER BY section ASC",
         "course_modules": f"SELECT * FROM {DB_PREFIX}_course_modules",
         "modules": f"SELECT * FROM {DB_PREFIX}_modules",
         "page": f"SELECT * FROM {DB_PREFIX}_page",
