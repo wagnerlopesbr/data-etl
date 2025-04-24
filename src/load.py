@@ -222,6 +222,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     #logger.debug(f"Unique sectionid values before mapping: {course_format_options_filtered['sectionid'].unique().tolist()}")
 
                     course_format_options_filtered["sectionid"] = course_format_options_filtered["sectionid"].astype("Int64")  # Pandas nullable int
+                    course_format_options_filtered = course_format_options_filtered.drop(columns=["id"])
 
                     logger.info(f"Final format_options to insert: {len(course_format_options_filtered)}")
                     course_format_options_filtered.to_sql(course_format_options_table, conn, if_exists="append", index=False)
