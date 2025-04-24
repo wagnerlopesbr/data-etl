@@ -121,7 +121,7 @@ def transform_quiz(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform(dataframes):
-    has_relevant_dataframe = "page" in dataframes or "choice" in dataframes
+    has_relevant_dataframe = "page" in dataframes or "choice" in dataframes or "quiz" in dataframes
     if not has_relevant_dataframe:
         logger.info("No relevant dataframes to transform.")
         return dataframes
