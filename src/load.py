@@ -102,12 +102,107 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     """
                 ))
 
+                page_instance_mapping = {}
+
+                if not page_df.empty:
+                    page_filtered = page_df[page_df["course"] == id].copy()
+                    if not page_filtered.empty:
+                        old_page_ids = page_filtered["id"].tolist()
+                        page_filtered["course"] = new_course_id
+                        page_filtered = page_filtered.drop(columns=["id"])
+                        if "content_link" in page_filtered.columns:
+                            page_filtered = page_filtered.drop(columns=["content_link"])
+                        try:
+                            page_filtered.to_sql(page_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_page_ids = [row[0] for row in result]
+                            page_instance_mapping.update(dict(zip(old_page_ids, new_page_ids)))
+                            logger.info(f"{len(page_filtered)} page(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting PAGE for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No PAGE entries found for course {id}.")
+                
+                if not label_df.empty:
+                    label_filtered = label_df[label_df["course"] == id].copy()
+                    if not label_filtered.empty:
+                        label_filtered["course"] = new_course_id
+                        label_filtered = label_filtered.drop(columns=["id"])
+                        try:
+                            label_filtered.to_sql(label_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(label_filtered)} label(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting LABEL for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No LABEL entries found for course {id}.")
+                
+                if not url_df.empty:
+                    url_filtered = url_df[url_df["course"] == id].copy()
+                    if not url_filtered.empty:
+                        url_filtered["course"] = new_course_id
+                        url_filtered = url_filtered.drop(columns=["id"])
+                        try:
+                            url_filtered.to_sql(url_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(url_filtered)} url(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting URL for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No URL entries found for course {id}.")
+                
+                if not resource_df.empty:
+                    resource_filtered = resource_df[resource_df["course"] == id].copy()
+                    if not resource_filtered.empty:
+                        resource_filtered["course"] = new_course_id
+                        resource_filtered = resource_filtered.drop(columns=["id"])
+                        try:
+                            resource_filtered.to_sql(resource_table, conn, if_exists="append", index=False)
+                            logger.info(f"{len(resource_filtered)} resource(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting RESOURCE for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No RESOURCE entries found for course {id}.")
+                
+                quiz_instance_mapping = {}
+
+                if not quiz_df.empty:
+                    quiz_filtered = quiz_df[quiz_df["course"] == id].copy()
+                    if not quiz_filtered.empty:
+                        old_quiz_ids = quiz_filtered["id"].tolist()
+                        quiz_filtered["course"] = new_course_id
+                        quiz_filtered = quiz_filtered.drop(columns=["id", "completionpass"])
+                        try:
+                            quiz_filtered.to_sql(quiz_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {quiz_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_quiz_ids = [row[0] for row in result]
+                            quiz_instance_mapping.update(dict(zip(old_quiz_ids, new_quiz_ids)))
+                            logger.info(f"{len(quiz_filtered)} quiz(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUIZ for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No QUIZ entries found for course {id}.")
+
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
                     # changing the module ids
-                    course_modules_filtered_df["module'"] = course_modules_filtered_df["module"].map(
+                    course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(
                         lambda func: new_modules_map.get(old_modules_map.get(func))
                     )
+                    # changing the quizzes instances ids
+                    quiz_module_id = new_modules_map.get("quiz")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == quiz_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == quiz_module_id, "instance"
+                    ].map(lambda inst: quiz_instance_mapping.get(inst, inst))
+
+                    # changing the pages instances ids
+                    page_module_id = new_modules_map.get("page")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == page_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == page_module_id, "instance"
+                    ].map(lambda inst: page_instance_mapping.get(inst, inst))
+
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
                     # droping old ids
@@ -230,73 +325,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 else:
                     logger.warning(f"No course_format_options found for course ID {id}.")
                 
-                if not page_df.empty:
-                    page_filtered = page_df[page_df["course"] == id].copy()
-                    if not page_filtered.empty:
-                        page_filtered["course"] = new_course_id
-                        page_filtered = page_filtered.drop(columns=["id"])
-                        if "content_link" in page_filtered.columns:
-                            page_filtered = page_filtered.drop(columns=["content_link"])
-                        try:
-                            page_filtered.to_sql(page_table, conn, if_exists="append", index=False)
-                            logger.info(f"{len(page_filtered)} page(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting PAGE for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No PAGE entries found for course {id}.")
-                
-                if not label_df.empty:
-                    label_filtered = label_df[label_df["course"] == id].copy()
-                    if not label_filtered.empty:
-                        label_filtered["course"] = new_course_id
-                        label_filtered = label_filtered.drop(columns=["id"])
-                        try:
-                            label_filtered.to_sql(label_table, conn, if_exists="append", index=False)
-                            logger.info(f"{len(label_filtered)} label(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting LABEL for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No LABEL entries found for course {id}.")
-                
-                if not url_df.empty:
-                    url_filtered = url_df[url_df["course"] == id].copy()
-                    if not url_filtered.empty:
-                        url_filtered["course"] = new_course_id
-                        url_filtered = url_filtered.drop(columns=["id"])
-                        try:
-                            url_filtered.to_sql(url_table, conn, if_exists="append", index=False)
-                            logger.info(f"{len(url_filtered)} url(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting URL for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No URL entries found for course {id}.")
-                
-                if not resource_df.empty:
-                    resource_filtered = resource_df[resource_df["course"] == id].copy()
-                    if not resource_filtered.empty:
-                        resource_filtered["course"] = new_course_id
-                        resource_filtered = resource_filtered.drop(columns=["id"])
-                        try:
-                            resource_filtered.to_sql(resource_table, conn, if_exists="append", index=False)
-                            logger.info(f"{len(resource_filtered)} resource(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting RESOURCE for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No RESOURCE entries found for course {id}.")
-                
-                if not quiz_df.empty:
-                    quiz_filtered = quiz_df[quiz_df["course"] == id].copy()
-                    if not quiz_filtered.empty:
-                        quiz_filtered["course"] = new_course_id
-                        quiz_filtered = quiz_filtered.drop(columns=["id", "completionpass"])
-                        try:
-                            quiz_filtered.to_sql(quiz_table, conn, if_exists="append", index=False)
-                            logger.info(f"{len(quiz_filtered)} quiz(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting QUIZ for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No QUIZ entries found for course {id}.")
-
             except Exception as e:
                 logger.error(f"Error inserting copied COURSE based on ID {id}: {e}")
 
