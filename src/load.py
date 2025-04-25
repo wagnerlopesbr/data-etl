@@ -31,6 +31,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     resource_table = f"{new_db.prefix}_resource"
     quiz_table = f"{new_db.prefix}_quiz"
     forum_table = f"{new_db.prefix}_forum"
+    reengagement_table = f"{new_db.prefix}_reengagement"
 
     module_instance_mapping = {}
 
@@ -52,6 +53,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         resource_df = dataframes.get("resource", pd.DataFrame())
         quiz_df = dataframes.get("quiz", pd.DataFrame())
         forum_df = dataframes.get("forum", pd.DataFrame())
+        reengagement_df = dataframes.get("reengagement", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -219,6 +221,25 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting FORUM for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No FORUM entries found for course {id}.")
+                
+                reengagement_instance_mapping = {}
+
+                if not reengagement_df.empty:
+                    reengagement_filtered = reengagement_df[reengagement_df["course"] == id].copy()
+                    if not reengagement_filtered.empty:
+                        old_reengagement_ids = reengagement_filtered["id"].tolist()
+                        reengagement_filtered["course"] = new_course_id
+                        reengagement_filtered = reengagement_filtered.drop(columns=["id"])
+                        try:
+                            reengagement_filtered.to_sql(reengagement_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {reengagement_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_reengagement_ids = [row[0] for row in result]
+                            reengagement_instance_mapping.update(dict(zip(old_reengagement_ids, new_reengagement_ids)))
+                            logger.info(f"{len(reengagement_filtered)} reengagement(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting REENGAGEMENT for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No REENGAGEMENT entries found for course {id}.")
 
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
@@ -273,6 +294,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ] = course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == forum_module_id, "instance"
                     ].map(lambda inst: forum_instance_mapping.get(inst, inst))
+
+                    # changing the reengagements instances ids
+                    reengagement_module_id = new_modules_map.get("reengagement")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == reengagement_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == reengagement_module_id, "instance"
+                    ].map(lambda inst: reengagement_instance_mapping.get(inst, inst))
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
