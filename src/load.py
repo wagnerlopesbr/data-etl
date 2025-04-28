@@ -302,6 +302,11 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ] = course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == reengagement_module_id, "instance"
                     ].map(lambda inst: reengagement_instance_mapping.get(inst, inst))
+                    if reengagement_module_id:
+                        course_modules_filtered_df.loc[
+                            course_modules_filtered_df["module"] == reengagement_module_id, 
+                            ["visible", "visibleold", "availability"]
+                        ] = [0, 0, None]
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]

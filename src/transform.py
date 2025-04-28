@@ -43,7 +43,7 @@ def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-    logger.debug("Filtering out 'Avaliação Inicial' and 'Initial Assessment' from course_sections...")
+    logger.debug("Filtering out specific sections to remove from course_sections...")
 
     sections_df = dataframes.get("course_sections", pd.DataFrame())
     modules_df = dataframes.get("course_modules", pd.DataFrame())
@@ -111,12 +111,22 @@ def transform_sequence(sequence_str, map):
 
 
 def transform_quiz(df: pd.DataFrame) -> pd.DataFrame:
-    logger.debug(f"Removing 'Avaliação Inicial' from QUIZ table...")
+    logger.debug(f"Removing 'Avaliação Inicial' or 'Initial Assessment' from QUIZ table...")
     df = df.copy()
     before = len(df)
     df = df[~df["name"].isin(["Avaliação Inicial", "Initial Assessment"])]
     after = len(df)
     logger.info(f"Removed {before - after} quiz entries named 'Avaliação Inicial' or 'Initial Assessment'.")
+    return df
+
+
+def transform_reengagement(df: pd.DataFrame) -> pd.DataFrame:
+    logger.debug(f"Removing 'Alerta de Início do Curso' or 'Course Start Alert' from REENGAGEMENT table...")
+    df = df.copy()
+    before = len(df)
+    df = df[~df["name"].isin(["Alerta de Início do Curso", "Course Start Alert"])]
+    after = len(df)
+    logger.info(f"Removed {before - after} reengagement entries named 'Alerta de Início do Curso' or 'Course Start Alert'.")
     return df
 
 
@@ -147,6 +157,12 @@ def transform(dataframes):
             dataframes["quiz"] = transform_quiz(dataframes["quiz"])
         except Exception as e:
             logger.error(f"Error transforming QUIZ: {e}")
+    
+    if "reengagement" in dataframes:
+        try:
+            dataframes["reengagement"] = transform_reengagement(dataframes["reengagement"])
+        except Exception as e:
+            logger.error(f"Error transforming REENGAGEMENT: {e}")
 
     logger.info("End of transforming process.")
     return dataframes
