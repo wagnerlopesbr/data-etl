@@ -33,14 +33,14 @@ def transform_page(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"PAGE table content transformed successfully.")
     return df
 
-
+"""
 def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug(f"Transforming content of the CHOICE table...")
     df = df.copy()
     df["match_name_filtering"] = df["name"].isin(["Política de Assinatura", "Signature Policy"])
     logger.info(f"CHOICE table content transformed successfully.")
     return df
-
+"""
 
 def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     logger.debug("Filtering out specific sections to remove from course_sections...")
@@ -143,12 +143,14 @@ def transform(dataframes):
             dataframes["page"] = transform_page(dataframes["page"])
         except Exception as e:
             logger.error(f"Error transforming PAGE: {e}.")
-
+    
+    """
     if "choice" in dataframes:
         try:
             dataframes["choice"] = transform_choice(dataframes["choice"])
         except Exception as e:
             logger.error(f"Error transforming CHOICE: {e}.")
+    """
     
     dataframes = transform_sections(dataframes)
 
