@@ -9,14 +9,14 @@ from src.transform import transform_sequence
 
 logger = start()
 
-
+"""
 def if_table_choice(table: str, df: pd.DataFrame):
     matching = df[df["match_name_filtering"]]
     not_matching = df[~df["match_name_filtering"]]
     logger.info(f"{table.upper()} has {len(matching)} rows matching 'Política de Assinatura' or 'Signature Policy'.")
     if len(not_matching) != 0:
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
-
+"""
 
 def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
     prefixed_table = f"{new_db.prefix}_{table}"
@@ -28,10 +28,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     page_table = f"{new_db.prefix}_page"
     label_table = f"{new_db.prefix}_label"
     url_table = f"{new_db.prefix}_url"
+    enrol_table = f"{new_db.prefix}_enrol"
     resource_table = f"{new_db.prefix}_resource"
     quiz_table = f"{new_db.prefix}_quiz"
     forum_table = f"{new_db.prefix}_forum"
     reengagement_table = f"{new_db.prefix}_reengagement"
+    choice_table = f"{new_db.prefix}_choice"
+    choice_options_table = f"{new_db.prefix}_choice_options"
 
     module_instance_mapping = {}
 
@@ -50,10 +53,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         page_df = dataframes.get("page", pd.DataFrame())
         label_df = dataframes.get("label", pd.DataFrame())
         url_df = dataframes.get("url", pd.DataFrame())
+        enrol_df = dataframes.get("enrol", pd.DataFrame())
         resource_df = dataframes.get("resource", pd.DataFrame())
         quiz_df = dataframes.get("quiz", pd.DataFrame())
         forum_df = dataframes.get("forum", pd.DataFrame())
         reengagement_df = dataframes.get("reengagement", pd.DataFrame())
+        choice_df = dataframes.get("choice", pd.DataFrame())
+        choice_options_df = dataframes.get("choice_options", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -105,6 +111,35 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     WHERE id = {new_course_context_id}
                     """
                 ))
+
+                choice_instance_mapping = {}
+
+                if not choice_df.empty:
+                    choice_filtered = choice_df[choice_df["course"] == id].copy()
+                    if not choice_filtered.empty:
+                        old_choice_ids = choice_filtered["id"].tolist()
+                        choice_filtered["course"] = new_course_id
+                        choice_filtered = choice_filtered.drop(columns=["id"])
+                        try:
+                            choice_filtered.to_sql(choice_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {choice_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_choice_ids = [row[0] for row in result]
+                            choice_instance_mapping.update(dict(zip(old_choice_ids, new_choice_ids)))
+                            if not choice_options_df.empty:
+                                choice_options_filtered = choice_options_df[choice_options_df["choiceid"].isin(old_choice_ids)].copy()
+                                if not choice_options_filtered.empty:
+                                    choice_options_filtered = choice_options_filtered.drop(columns=["id"])
+                                    try:
+                                        choice_options_filtered["choiceid"] = choice_options_filtered["choiceid"].map(choice_instance_mapping)
+                                        choice_options_filtered.to_sql(choice_options_table, conn, if_exists="append", index=False)
+                                        logger.info(f"{len(choice_options_filtered)} choice_option(s) inserted for course {new_course_id}.")
+                                    except Exception as e:
+                                        logger.error(f"Error inserting CHOICE_OPTIONS for course {new_course_id}: {e}")
+                            logger.info(f"{len(choice_filtered)} choice(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting CHOICE for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No CHOICE entries found for course {id}.")
 
                 page_instance_mapping = {}
 
@@ -164,6 +199,25 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting URL for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No URL entries found for course {id}.")
+                
+                enrol_instance_mapping = {}
+                
+                if not enrol_df.empty:
+                    enrol_filtered = enrol_df[enrol_df["courseid"] == id].copy()
+                    if not enrol_filtered.empty:
+                        old_enrol_ids = enrol_filtered["id"].tolist()
+                        enrol_filtered["courseid"] = new_course_id
+                        enrol_filtered = enrol_filtered.drop(columns=["id"])
+                        try:
+                            enrol_filtered.to_sql(enrol_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {enrol_table} WHERE courseid = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_enrol_ids = [row[0] for row in result]
+                            enrol_instance_mapping.update(dict(zip(old_enrol_ids, new_enrol_ids)))
+                            logger.info(f"{len(enrol_filtered)} enrol(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting ENROL for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No ENROL entries found for course {id}.")
                 
                 resource_instance_mapping = {}
 
@@ -307,6 +361,22 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             course_modules_filtered_df["module"] == reengagement_module_id, 
                             ["visible", "visibleold", "availability"]
                         ] = [0, 0, None]
+                    
+                    # changing the choices instances ids
+                    choice_module_id = new_modules_map.get("choice")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == choice_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == choice_module_id, "instance"
+                    ].map(lambda inst: choice_instance_mapping.get(inst, inst))
+
+                    # changing the enrols instances ids
+                    enrol_module_id = new_modules_map.get("enrol")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == enrol_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == enrol_module_id, "instance"
+                    ].map(lambda inst: enrol_instance_mapping.get(inst, inst))
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
@@ -463,11 +533,13 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[399, 53, 400], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
 
+                """
                 if table == "choice":
                     if_table_choice(table, df)
-
+                """
+                
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
                 df.to_excel(writer, sheet_name=table, index=False)
