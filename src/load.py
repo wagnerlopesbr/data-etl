@@ -35,6 +35,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     reengagement_table = f"{new_db.prefix}_reengagement"
     choice_table = f"{new_db.prefix}_choice"
     choice_options_table = f"{new_db.prefix}_choice_options"
+    #hvp_table = f"{new_db.prefix}_hvp"
 
     module_instance_mapping = {}
 
@@ -60,6 +61,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         reengagement_df = dataframes.get("reengagement", pd.DataFrame())
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
+        #hvp_df = dataframes.get("hvp", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -294,6 +296,27 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting REENGAGEMENT for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No REENGAGEMENT entries found for course {id}.")
+                
+                """
+                hvp_instance_mapping = {}
+
+                if not hvp_df.empty:
+                    hvp_filtered = hvp_df[hvp_df["course"] == id].copy()
+                    if not hvp_filtered.empty:
+                        old_hvp_ids = hvp_filtered["id"].tolist()
+                        hvp_filtered["course"] = new_course_id
+                        hvp_filtered = hvp_filtered.drop(columns=["id"])
+                        try:
+                            hvp_filtered.to_sql(hvp_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {hvp_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
+                            new_hvp_ids = [row[0] for row in result]
+                            hvp_instance_mapping.update(dict(zip(old_hvp_ids, new_hvp_ids)))
+                            logger.info(f"{len(hvp_filtered)} hvp(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting HVP for course {new_course_id}: {e}")
+                    else:
+                        logger.warning(f"No HVP entries found for course {id}.")
+                """
 
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
@@ -378,6 +401,16 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == enrol_module_id, "instance"
                     ].map(lambda inst: enrol_instance_mapping.get(inst, inst))
 
+                    """
+                    # changing the hvps instances ids
+                    hvp_module_id = new_modules_map.get("hvp")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == hvp_module_id, "instance"
+                    ] = course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == hvp_module_id, "instance"
+                    ].map(lambda inst: hvp_instance_mapping.get(inst, inst))
+                    """
+
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
                     # droping old ids
@@ -392,6 +425,15 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                                     (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
                                     """
                         )
+                        contional_modules = [7, 17, 18, 21]  # modules to be inserted with specific RESTRICTIONS
+                        """
+                        7 = feedback
+                        17 = quiz
+                        18 = resource
+                        21 = url
+                        """
+                        if row["module"] in contional_modules:
+                            row["availability"] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[true]}'
                         row_cleaned = row.replace({pd.NA: None, '': None}).where(pd.notnull(row), None)
                         row_dict = row_cleaned.to_dict()
                         conn.execute(sql, row_dict)
