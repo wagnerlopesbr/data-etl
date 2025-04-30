@@ -422,13 +422,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                                     (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
                                     """
                         )
-                        contional_modules = [7, 17, 18, 21, 27]  # modules to be inserted with specific RESTRICTIONS
+                        contional_modules = [7, 17, 18, 21]  # modules to be inserted with specific RESTRICTIONS
                         """
                         7 = feedback
                         17 = quiz
                         18 = resource
                         21 = url
-                        27 = hvp
                         """
                         if row["module"] in contional_modules:
                             row["availability"] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[true]}'
@@ -525,12 +524,18 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         sequence_value = section_sequence_map.get(old_section_index, '')
                         section_to_sequence_mapping[new_section_id] = sequence_value
                     
-                    # manipulating a specific course_module to adjust the availability and restrictions
+
+
+
                     content_section = conn.execute(text(f"SELECT section FROM {sections_table} WHERE course = :course_id AND name IN ('Conteúdo', 'Content') ORDER BY section ASC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                    logger.info(f"'Conteúdo' or 'Content' section integer value: {content_section}")
+
                     daughter_content_section = conn.execute(text(f"SELECT sequence FROM {sections_table} WHERE course = :course_id AND section > :content_section ORDER BY section ASC LIMIT 1"), {"course_id": new_course_id, "content_section": content_section}).scalar()
                     daughter_content_section_module = daughter_content_section.split(",")[0]
-                    availability_placeholder = '{"op":"|","c":[],"show":true}'
-                    conn.execute(text(f"UPDATE {course_modules_table} SET availability = :availability WHERE course = :course_id AND id = :id"), {"course_id": new_course_id, "id": int(daughter_content_section_module), "availability": availability_placeholder})                 
+                    logger.info(f"'Conteúdo' or 'Content' specific module that shouldn't be restricted: {daughter_content_section_module}")
+                    conn.execute(text(f"UPDATE {course_modules_table} SET availability = 'NULL' WHERE course = :course_id AND id = :id"), {"course_id": new_course_id, "id": int(daughter_content_section_module)})
+                    
+
 
                     #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
 

@@ -27,7 +27,7 @@ def extract(conn, DB_PREFIX):
         "label": f"SELECT * FROM {DB_PREFIX}_label",
         "resource": f"SELECT * FROM {DB_PREFIX}_resource",
         "reengagement": f"SELECT * FROM {DB_PREFIX}_reengagement",
-        #"hvp": f"SELECT * FROM {DB_PREFIX}_hvp ORDER BY id ASC",
+        "hvp": f"SELECT * FROM {DB_PREFIX}_hvp ORDER BY id ASC",
         "course_format_options": f"SELECT * FROM {DB_PREFIX}_course_format_options ORDER BY sectionid ASC",
         "course_modules_sections": f"""
                                        SELECT
