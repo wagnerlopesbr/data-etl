@@ -18,6 +18,37 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
+def create_customcert(new_course_id):
+    default_customcert_df = pd.DataFrame([{
+        'course': new_course_id,
+        'templateid': 0,
+        'name': "Certificado de Conclusão",
+        'intro': """
+                    <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Aumente suas chances no mercado de trabalho adicionando seu certificado no LinkedIn através do botão:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"><img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="Botão do LinkedIn para Adicionar ao Perfil"></a></p>
+                 """,
+        'introformat': 1,
+        'requiredtime': 0,
+        'verifyany': 0,
+        'deliveryoption': 0,
+        'emailstudents': 0,
+        'emailteachers': 0,
+        'emailothers': '',
+        'protection': 0,
+        'language': 'pt_br',
+        'timecreated': int(time()),
+        'timemodified': int(time())
+    }])
+
+    
+
+
+
+
+
+
+
+
+
 def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
     prefixed_table = f"{new_db.prefix}_{table}"
     context_table = f"{new_db.prefix}_context"
@@ -36,6 +67,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     choice_table = f"{new_db.prefix}_choice"
     choice_options_table = f"{new_db.prefix}_choice_options"
     #hvp_table = f"{new_db.prefix}_hvp"
+    cc_table = f"{new_db.prefix}_customcert"
+    cc_templates_table = f"{new_db.prefix}_customcert_templates"
+    cc_elements_table = f"{new_db.prefix}_customcert_elements"
+    cc_pages_table = f"{new_db.prefix}_customcert_pages"
 
     module_instance_mapping = {}
 
@@ -62,6 +97,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
         #hvp_df = dataframes.get("hvp", pd.DataFrame())
+        cc_templates_br_df = dataframes.get("customcert_templates_ptbr", pd.DataFrame())
+        cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
+        cc_pages_br_df = dataframes.get("customcert_pages_ptbr", pd.DataFrame())
+        cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
+        cc_elements_br_df = dataframes.get("customcert_elements_ptbr", pd.DataFrame())
+        cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -427,13 +468,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                                     (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
                                     """
                         )
-                        contional_modules = [7, 17, 18, 21, 27]  # modules to be inserted with specific RESTRICTIONS
+                        contional_modules = [7, 17, 18, 21, 27, 29]  # modules to be inserted with specific RESTRICTIONS
                         """
                         7 = feedback
                         17 = quiz
                         18 = resource
                         21 = url
                         27 = hvp
+                        29 = customcert
                         """
                         if row["module"] in contional_modules:
                             row["availability"] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[true]}'
@@ -603,7 +645,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399, 400], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
