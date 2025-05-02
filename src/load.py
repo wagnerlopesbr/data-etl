@@ -488,6 +488,11 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_sections_df["name"].str.strip().str.lower().isin(["conteúdo", "content"]),
                         "availability"
                     ] = '{"op":"|","c":[],"show":false}'
+                    course_sections_df.loc[
+                        course_sections_df["name"].str.strip().str.lower().isin(["avaliações finais", "certificado", "final assessments", "certificate"]),
+                        "availability"
+                    ] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[false]}'
+
                     course_sections_df["sequence"] = course_sections_df["sequence"].apply(
                         lambda seq: transform_sequence(seq, module_instance_mapping, hvp_module_ids)
                     )
@@ -598,7 +603,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 399, 400], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
