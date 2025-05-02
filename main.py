@@ -37,7 +37,7 @@ def main():
         logger.debug("ETL process started...")
         
         with old_engine.connect() as old_conn, new_engine.begin() as new_conn:  # .connect to reading (no transactions and locks, better performance) // .begin to load (starting transaction -> require commit/rollback)
-            dataframes = extract(old_conn, old_db.prefix)
+            dataframes = extract(old_conn, new_conn, old_db.prefix, new_db.prefix)
             dataframes = transform(dataframes)
             load(dataframes, new_conn, new_db)
         logger.info("ETL process completed successfully!")
