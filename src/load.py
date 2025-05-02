@@ -35,7 +35,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     reengagement_table = f"{new_db.prefix}_reengagement"
     choice_table = f"{new_db.prefix}_choice"
     choice_options_table = f"{new_db.prefix}_choice_options"
-    hvp_table = f"{new_db.prefix}_hvp"
+    #hvp_table = f"{new_db.prefix}_hvp"
 
     module_instance_mapping = {}
 
@@ -61,7 +61,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         reengagement_df = dataframes.get("reengagement", pd.DataFrame())
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
-        hvp_df = dataframes.get("hvp", pd.DataFrame())
+        #hvp_df = dataframes.get("hvp", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -297,6 +297,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     else:
                         logger.warning(f"No REENGAGEMENT entries found for course {id}.")
                 
+                """
                 hvp_instance_mapping = {}
 
                 if not hvp_df.empty:
@@ -315,6 +316,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting HVP for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No HVP entries found for course {id}.")
+                """
 
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
@@ -322,6 +324,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(
                         lambda func: new_modules_map.get(old_modules_map.get(func))
                     )
+                    hvp_module_ids = set(course_modules_filtered_df[course_modules_filtered_df["module"] == 27]["id"].tolist())
                     # changing the quizzes instances ids
                     quiz_module_id = new_modules_map.get("quiz")
                     course_modules_filtered_df.loc[
@@ -400,6 +403,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ].map(lambda inst: enrol_instance_mapping.get(inst, inst))
 
 
+                    """
                     # changing the hvps instances ids
                     hvp_module_id = new_modules_map.get("hvp")
                     course_modules_filtered_df.loc[
@@ -407,6 +411,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ] = course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == hvp_module_id, "instance"
                     ].map(lambda inst: hvp_instance_mapping.get(inst, inst))
+                    """
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
@@ -484,8 +489,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         "availability"
                     ] = '{"op":"|","c":[],"show":false}'
                     course_sections_df["sequence"] = course_sections_df["sequence"].apply(
-                        lambda seq: transform_sequence(seq, module_instance_mapping)
+                        lambda seq: transform_sequence(seq, module_instance_mapping, hvp_module_ids)
                     )
+                    #logger.warning(f"HERE -@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ {hvp_module_ids}")
+                    #logger.warning(f"HERE ->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> {module_instance_mapping}")
 
                     #logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
 
@@ -528,9 +535,16 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     # manipulating a specific course_module to adjust the availability and restrictions
                     content_section = conn.execute(text(f"SELECT section FROM {sections_table} WHERE course = :course_id AND name IN ('Conteúdo', 'Content') ORDER BY section ASC LIMIT 1"), {"course_id": new_course_id}).scalar()
                     daughter_content_section = conn.execute(text(f"SELECT sequence FROM {sections_table} WHERE course = :course_id AND section > :content_section ORDER BY section ASC LIMIT 1"), {"course_id": new_course_id, "content_section": content_section}).scalar()
-                    daughter_content_section_module = daughter_content_section.split(",")[0]
-                    availability_placeholder = '{"op":"|","c":[],"show":true}'
-                    conn.execute(text(f"UPDATE {course_modules_table} SET availability = :availability WHERE course = :course_id AND id = :id"), {"course_id": new_course_id, "id": int(daughter_content_section_module), "availability": availability_placeholder})                 
+                    
+                    if daughter_content_section:
+                        sequence_ids = [int(x) for x in daughter_content_section.split(",") if x.strip().isdigit()]
+                        hvp_ids_result = conn.execute(text(f"SELECT id FROM {course_modules_table} WHERE course = :course_id AND module = 27"), {"course_id": new_course_id}).fetchall()
+                        hvp_ids = {row[0] for row in hvp_ids_result}
+                        filtered_sequence_ids = [cm_id for cm_id in sequence_ids if cm_id not in hvp_ids]                
+                        
+                        if filtered_sequence_ids:
+                            availability_placeholder = '{"op":"|","c":[],"show":true}'
+                            conn.execute(text(f"UPDATE {course_modules_table} SET availability = :availability WHERE course = :course_id AND id = :id"), {"course_id": new_course_id, "id": filtered_sequence_ids[0], "availability": availability_placeholder})                 
 
                     #logger.debug(f"Section ID to Sequence Mapping: {section_to_sequence_mapping}")
 
