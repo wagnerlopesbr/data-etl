@@ -1,13 +1,14 @@
 from typing import Dict, List
 import pandas as pd
 import os
-import datetime
 from src.logging import start
 from sqlalchemy import text
 from src.transform import transform_sequence
+from datetime import datetime
 
 
 logger = start()
+timestamp = int(datetime.now().timestamp())
 
 """
 def if_table_choice(table: str, df: pd.DataFrame):
@@ -18,7 +19,20 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
-def create_customcert(new_course_id):
+def create_customcert_instance(new_course_id):
+    """
+    vamos repensar. a ordem das ações devem ser:
+    1. criei o course
+    2. criei o elemento customcert com customcert.templateid = 0 por default (para alterar depois) com customcert.name sempre = "Certificado de Conclusão"
+    3. criei o course_module para este course_module.instance (customcert.id)
+    4. criei o context para este elemento context.instanceid (course_module.id)
+    5. criei o customcert_templates para customcert_templates.contextid (context.id) com customcert_templates.name sempre = f"Template {course.shortname}"
+    6. criei o customcert_pages para customcert_pages.templateid (customcert_templates.id)
+    7. criei o customcert_elements para customcert_elements.pageid (customcert_pages.id)
+    8. editei o valor de customcert.templateid para o novo customcert_templates.id
+
+    lembrando que os valores dos dados de customcert_pages devem ser sempre os mesmos com exceção de customcert_pages.templateid, e os valores dos dados de customcert_elements devem ser sempre os mesmos com exceção de customcert_elements.pageid, que devem ser os novos gerados
+    """
     default_customcert_df = pd.DataFrame([{
         'course': new_course_id,
         'templateid': 0,
@@ -27,27 +41,61 @@ def create_customcert(new_course_id):
                     <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Aumente suas chances no mercado de trabalho adicionando seu certificado no LinkedIn através do botão:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"><img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="Botão do LinkedIn para Adicionar ao Perfil"></a></p>
                  """,
         'introformat': 1,
-        'requiredtime': 0,
-        'verifyany': 0,
-        'deliveryoption': 0,
-        'emailstudents': 0,
+        'requiredtime': 1,
+        'verifyany': 1,
+        'deliveryoption': 'I',
+        'emailstudents': 1,
         'emailteachers': 0,
-        'emailothers': '',
-        'protection': 0,
-        'language': 'pt_br',
-        'timecreated': int(time()),
-        'timemodified': int(time())
+        'emailothers': 'certificado@talisma.seg.br',
+        'timecreated': timestamp,
+        'timemodified': timestamp
     }])
+    return default_customcert_df
 
-    
+def insert_customcert_full(conn, new_course_id: int, customcert_id: int, new_cm_id: int, new_course_shortname: str,
+                           templates_df: pd.DataFrame, pages_df: pd.DataFrame, elements_df: pd.DataFrame, new_db: str):
+    timestamp = int(datetime.now().timestamp())
 
+    # 1. Inserir customcert_templates com contextid do course_module
+    template_data = templates_df.copy()
+    template_data["contextid"] = conn.execute(
+        text(f"SELECT id FROM {new_db}_context WHERE instanceid = :instanceid AND contextlevel = 70 ORDER BY id DESC LIMIT 1"),
+        {"instanceid": new_cm_id}
+    ).scalar()
+    template_data["name"] = f"Template {new_course_shortname}"
+    template_data["timecreated"] = timestamp
+    template_data["timemodified"] = timestamp
+    template_data.to_sql(f"{new_db}_customcert_templates", conn, if_exists="append", index=False)
 
+    new_template_id = conn.execute(
+        text(f"SELECT id FROM {new_db}_customcert_templates WHERE contextid = :ctx ORDER BY id DESC LIMIT 1"),
+        {"ctx": template_data["contextid"].iloc[0]}
+    ).scalar()
 
+    # 2. Inserir customcert_pages com templateid = new_template_id
+    pages_to_insert = pages_df.copy()
+    pages_to_insert["templateid"] = new_template_id
+    pages_to_insert["timecreated"] = timestamp
+    pages_to_insert["timemodified"] = timestamp
+    pages_to_insert.to_sql(f"{new_db}_customcert_pages", conn, if_exists="append", index=False)
 
+    new_page_id = conn.execute(
+        text(f"SELECT id FROM {new_db}_customcert_pages WHERE templateid = :tid ORDER BY id DESC LIMIT 1"),
+        {"tid": new_template_id}
+    ).scalar()
 
+    # 3. Inserir customcert_elements com pageid = new_page_id
+    elements_to_insert = elements_df.copy()
+    elements_to_insert["pageid"] = new_page_id
+    elements_to_insert["timecreated"] = timestamp
+    elements_to_insert["timemodified"] = timestamp
+    elements_to_insert.to_sql(f"{new_db}_customcert_elements", conn, if_exists="append", index=False)
 
-
-
+    # 4. Atualizar customcert.templateid com o novo template
+    conn.execute(
+        text(f"UPDATE {new_db}_customcert SET templateid = :tid WHERE id = :cid"),
+        {"tid": new_template_id, "cid": customcert_id}
+    )
 
 def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
     prefixed_table = f"{new_db.prefix}_{table}"
@@ -67,11 +115,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     choice_table = f"{new_db.prefix}_choice"
     choice_options_table = f"{new_db.prefix}_choice_options"
     #hvp_table = f"{new_db.prefix}_hvp"
+    """
     cc_table = f"{new_db.prefix}_customcert"
     cc_templates_table = f"{new_db.prefix}_customcert_templates"
     cc_elements_table = f"{new_db.prefix}_customcert_elements"
     cc_pages_table = f"{new_db.prefix}_customcert_pages"
-
+    """
+    
     module_instance_mapping = {}
 
     for id in ids:
@@ -97,12 +147,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
         #hvp_df = dataframes.get("hvp", pd.DataFrame())
+        """
         cc_templates_br_df = dataframes.get("customcert_templates_ptbr", pd.DataFrame())
         cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
         cc_pages_br_df = dataframes.get("customcert_pages_ptbr", pd.DataFrame())
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_br_df = dataframes.get("customcert_elements_ptbr", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
+        """
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -359,6 +411,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         logger.warning(f"No HVP entries found for course {id}.")
                 """
 
+                customcert_df = create_customcert_instance(new_course_id)
+                customcert_df.to_sql(f"{new_db.prefix}_customcert", conn, if_exists="append", index=False)
+                customcert_instance_id = conn.execute(
+                    text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"),
+                    {"course_id": new_course_id}
+                ).scalar()
+                
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
                     # changing the module ids
@@ -453,6 +512,11 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == hvp_module_id, "instance"
                     ].map(lambda inst: hvp_instance_mapping.get(inst, inst))
                     """
+
+                    customcert_module_id = new_modules_map.get("customcert")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == customcert_module_id, "instance"
+                    ] = customcert_instance_id
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
@@ -617,7 +681,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
 
 def get_unique_filename(output_dir: str) -> str:
-    date_str = datetime.datetime.now().strftime("%m_%d_%Y")
+    date_str = datetime.now().strftime("%m_%d_%Y")
     version = 1
     while True:
         filename = f"loaded_data_{date_str}_v{version}.xlsx"
@@ -645,7 +709,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 400], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
