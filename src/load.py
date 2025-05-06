@@ -19,20 +19,7 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
-def create_customcert_instance(new_course_id):
-    """
-    vamos repensar. a ordem das ações devem ser:
-    1. criei o course
-    2. criei o elemento customcert com customcert.templateid = 0 por default (para alterar depois) com customcert.name sempre = "Certificado de Conclusão"
-    3. criei o course_module para este course_module.instance (customcert.id)
-    4. criei o context para este elemento context.instanceid (course_module.id)
-    5. criei o customcert_templates para customcert_templates.contextid (context.id) com customcert_templates.name sempre = f"Template {course.shortname}"
-    6. criei o customcert_pages para customcert_pages.templateid (customcert_templates.id)
-    7. criei o customcert_elements para customcert_elements.pageid (customcert_pages.id)
-    8. editei o valor de customcert.templateid para o novo customcert_templates.id
-
-    lembrando que os valores dos dados de customcert_pages devem ser sempre os mesmos com exceção de customcert_pages.templateid, e os valores dos dados de customcert_elements devem ser sempre os mesmos com exceção de customcert_elements.pageid, que devem ser os novos gerados
-    """
+def create_customcert_instance_df(new_course_id):
     default_customcert_df = pd.DataFrame([{
         'course': new_course_id,
         'templateid': 0,
@@ -47,55 +34,35 @@ def create_customcert_instance(new_course_id):
         'emailstudents': 1,
         'emailteachers': 0,
         'emailothers': 'certificado@talisma.seg.br',
+        'protection': 'modify',
         'timecreated': timestamp,
         'timemodified': timestamp
     }])
     return default_customcert_df
 
-def insert_customcert_full(conn, new_course_id: int, customcert_id: int, new_cm_id: int, new_course_shortname: str,
-                           templates_df: pd.DataFrame, pages_df: pd.DataFrame, elements_df: pd.DataFrame, new_db: str):
-    timestamp = int(datetime.now().timestamp())
+def create_customcert_template_df(df, contextid, course_shortname):
+    df["name"] = f"Template {course_shortname}"
+    df["contextid"] = contextid
+    df["timecreated"] = timestamp
+    df["timemodified"] = timestamp
+    df = df.drop(columns=["id"])
+    return df
 
-    # 1. Inserir customcert_templates com contextid do course_module
-    template_data = templates_df.copy()
-    template_data["contextid"] = conn.execute(
-        text(f"SELECT id FROM {new_db}_context WHERE instanceid = :instanceid AND contextlevel = 70 ORDER BY id DESC LIMIT 1"),
-        {"instanceid": new_cm_id}
-    ).scalar()
-    template_data["name"] = f"Template {new_course_shortname}"
-    template_data["timecreated"] = timestamp
-    template_data["timemodified"] = timestamp
-    template_data.to_sql(f"{new_db}_customcert_templates", conn, if_exists="append", index=False)
+# to do: ---------------------------------------------
+def create_customcert_page_df(df, templateid):
+    df["templateid"] = templateid
+    df["timecreated"] = timestamp
+    df["timemodified"] = timestamp
+    df = df.drop(columns=["id"])
+    return df
 
-    new_template_id = conn.execute(
-        text(f"SELECT id FROM {new_db}_customcert_templates WHERE contextid = :ctx ORDER BY id DESC LIMIT 1"),
-        {"ctx": template_data["contextid"].iloc[0]}
-    ).scalar()
-
-    # 2. Inserir customcert_pages com templateid = new_template_id
-    pages_to_insert = pages_df.copy()
-    pages_to_insert["templateid"] = new_template_id
-    pages_to_insert["timecreated"] = timestamp
-    pages_to_insert["timemodified"] = timestamp
-    pages_to_insert.to_sql(f"{new_db}_customcert_pages", conn, if_exists="append", index=False)
-
-    new_page_id = conn.execute(
-        text(f"SELECT id FROM {new_db}_customcert_pages WHERE templateid = :tid ORDER BY id DESC LIMIT 1"),
-        {"tid": new_template_id}
-    ).scalar()
-
-    # 3. Inserir customcert_elements com pageid = new_page_id
-    elements_to_insert = elements_df.copy()
-    elements_to_insert["pageid"] = new_page_id
-    elements_to_insert["timecreated"] = timestamp
-    elements_to_insert["timemodified"] = timestamp
-    elements_to_insert.to_sql(f"{new_db}_customcert_elements", conn, if_exists="append", index=False)
-
-    # 4. Atualizar customcert.templateid com o novo template
-    conn.execute(
-        text(f"UPDATE {new_db}_customcert SET templateid = :tid WHERE id = :cid"),
-        {"tid": new_template_id, "cid": customcert_id}
-    )
+def create_customcert_element_df(df, pageid):
+    df["pageid"] = pageid
+    df["timecreated"] = timestamp
+    df["timemodified"] = timestamp
+    df = df.drop(columns=["id"])
+    return df
+# till here ------------------------------------------
 
 def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
     prefixed_table = f"{new_db.prefix}_{table}"
@@ -115,12 +82,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     choice_table = f"{new_db.prefix}_choice"
     choice_options_table = f"{new_db.prefix}_choice_options"
     #hvp_table = f"{new_db.prefix}_hvp"
-    """
     cc_table = f"{new_db.prefix}_customcert"
     cc_templates_table = f"{new_db.prefix}_customcert_templates"
     cc_elements_table = f"{new_db.prefix}_customcert_elements"
     cc_pages_table = f"{new_db.prefix}_customcert_pages"
-    """
     
     module_instance_mapping = {}
 
@@ -147,14 +112,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
         #hvp_df = dataframes.get("hvp", pd.DataFrame())
-        """
         cc_templates_br_df = dataframes.get("customcert_templates_ptbr", pd.DataFrame())
         cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
         cc_pages_br_df = dataframes.get("customcert_pages_ptbr", pd.DataFrame())
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_br_df = dataframes.get("customcert_elements_ptbr", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
-        """
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -411,12 +374,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         logger.warning(f"No HVP entries found for course {id}.")
                 """
 
-                customcert_df = create_customcert_instance(new_course_id)
-                customcert_df.to_sql(f"{new_db.prefix}_customcert", conn, if_exists="append", index=False)
+                customcert_df = create_customcert_instance_df(new_course_id)
+                customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
                 customcert_instance_id = conn.execute(
                     text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"),
                     {"course_id": new_course_id}
                 ).scalar()
+                logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
+
                 
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
@@ -582,6 +547,33 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             {"path": path_cm, "id": new_cm_context_id})
                     logger.info(f"{len(course_modules_filtered_df)} course_modules inserted.")
 
+                if not customcert_df.empty:
+                    customcert_cm_id = conn.execute(text(
+                        f"SELECT id FROM {course_modules_table} WHERE course = :course_id AND module = 29 AND instance = :customcert_instance_id ORDER BY id DESC LIMIT 1"),
+                        {"course_id": new_course_id, "customcert_instance_id": customcert_instance_id}
+                    ).scalar()
+                    logger.info(f"NEW CUSTOMCERT CM ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT CM ID: {customcert_cm_id}")
+
+                    customcert_cm_context_id = conn.execute(text(
+                        f"SELECT id FROM {context_table} WHERE instanceid = :instanceid AND contextlevel = 70 ORDER BY id DESC LIMIT 1"),
+                        {"instanceid": customcert_cm_id}
+                    ).scalar()
+                    logger.info(f"NEW CUSTOMCERT CM CONTEXT ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT CM CONTEXT ID: {customcert_cm_context_id}")
+
+                    shortname = conn.execute(text(
+                        f"SELECT shortname FROM {prefixed_table} WHERE id = :course_id"),
+                        {"course_id": new_course_id}
+                    ).scalar()
+                    logger.info(f"NEW COURSE SHORTNAME inserted successfully! OLD COURSE ID: {id} | NEW COURSE SHORTNAME: {shortname}")
+
+                    customcert_template_df = create_customcert_template_df(cc_templates_br_df, customcert_cm_context_id, shortname)
+                    customcert_template_df.to_sql(f"{cc_templates_table}", conn, if_exists="append", index=False)
+                    customcert_template_id = conn.execute(
+                        text(f"SELECT id FROM {new_db.prefix}_customcert_templates WHERE contextid = :context_id ORDER BY id DESC LIMIT 1"),
+                        {"context_id": customcert_cm_context_id}
+                    ).scalar()
+                    logger.info(f"NEW CUSTOMCERT TEMPLATE ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT TEMPLATE ID: {customcert_template_id}")
+
                 if not course_sections_df.empty:
                     #logger.debug(f"Course {new_course_id} has {len(course_sections_df)} sections.")
                                         
@@ -709,7 +701,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 400], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
