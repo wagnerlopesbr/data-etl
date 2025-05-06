@@ -85,7 +85,6 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         except Exception as e:
             logger.error(f"Error extracting {table.upper()} from OLD DB: {e}.")
     
-    """
     for table, query in new_queries.items():
         try:
             logger.debug(f"Running query for '{table.upper()}'...")
@@ -94,7 +93,6 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
             dataframes[table] = df
         except Exception as e:
             logger.error(f"Error extracting {table.upper()} from NEW DB: {e}.")
-    """
             
     logger.info(f"End of extraction process.")
     return dataframes
