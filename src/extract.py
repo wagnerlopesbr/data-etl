@@ -13,6 +13,8 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "context_category": f"SELECT * FROM {old_db_prefix}_context WHERE contextlevel = 40",
         "course_categories": f"SELECT * FROM {old_db_prefix}_course_categories",
         "course": f"SELECT * FROM {old_db_prefix}_course WHERE format <> 'site'",
+        "customfield_field": f"SELECT * FROM {old_db_prefix}_customfield_field WHERE categoryid = 2 ORDER BY FIELD(id, 8, 1, 2, 3, 4, 5, 6, 7)",
+        "customfield_data": f"SELECT * FROM {old_db_prefix}_customfield_data ORDER BY FIELD(fieldid, 8, 1, 2, 3, 4, 5, 6, 7)",
         "course_sections": f"SELECT * FROM {old_db_prefix}_course_sections ORDER BY section ASC",
         "course_modules": f"SELECT * FROM {old_db_prefix}_course_modules",
         "modules": f"SELECT * FROM {old_db_prefix}_modules",
@@ -49,11 +51,12 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
 
     new_queries = {
         "customcert_templates_ptbr": f"SELECT * FROM {new_db_prefix}_customcert_templates WHERE id = 2 LIMIT 1",
-        "customcert_pages_ptbr": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 2 ORDER BY sequence ASC",
-        "customcert_elements_ptbr": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (3, 10) ORDER BY id ASC",
+        "customcert_pages_ptbr": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 2 ORDER BY id, sequence ASC",
+        "customcert_elements_ptbr": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (3, 10) ORDER BY pageid, sequence ASC",
         "customcert_templates_en": f"SELECT * FROM {new_db_prefix}_customcert_templates WHERE id = 15 LIMIT 1",
-        "customcert_pages_en": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY sequence ASC",
-        "customcert_elements_en": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY id ASC"
+        "customcert_pages_en": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY id, sequence ASC",
+        "customcert_elements_en": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY pageid, sequence ASC",
+        "customfield_field": f"SELECT * FROM {new_db_prefix}_customfield_field WHERE categoryid = 7 ORDER BY id ASC"
     }
 
     specific_joins = ["page", "feedback", "quiz", "url", "forum", "reengagement"]
