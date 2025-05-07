@@ -20,9 +20,8 @@ def if_table_choice(table: str, df: pd.DataFrame):
 """
 
 # to do \/ ------------------------------------------------------------------
-def create_course_customfield_instance_df(customfield_df, extra_rows_data):
-    """
-    {
+def create_course_customfield_data_df():
+    fieldid_mapping_old_to_new = {
         8: 7,
         'NULL': 14,
         'NULL': 15,
@@ -34,25 +33,7 @@ def create_course_customfield_instance_df(customfield_df, extra_rows_data):
         6: 21,
         7: 22
     }
-    """
-    fieldid_mapping = {
-        8: 7,
-        1: 16,
-        2: 17,
-        3: 18,
-        4: 19,
-        5: 20,
-        6: 21,
-        7: 22
-    }
 
-    extra_rows_mapping = {
-        extra_rows_data[0]: 14,
-        extra_rows_data[1]: 15
-    }
-
-    customfield_filtered = customfield_df[customfield_df["fieldid"].isin(fieldid_mapping.keys())].copy()
-    customfield_filtered["fieldid"] = customfield_filtered["fieldid"].map(fieldid_mapping)
 # to do /\ ------------------------------------------------------------------
 
 
@@ -127,6 +108,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     cc_templates_table = f"{new_db.prefix}_customcert_templates"
     cc_elements_table = f"{new_db.prefix}_customcert_elements"
     cc_pages_table = f"{new_db.prefix}_customcert_pages"
+    customfield_field_table = f"{new_db.prefix}_customfield_field"
+    customfield_data_table = f"{new_db.prefix}_customfield_data"
     
     module_instance_mapping = {}
 
@@ -159,6 +142,9 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
+        customfield_field_old_df = dataframes.get("customfield_field_old", pd.DataFrame())
+        customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
+        customfield_field_new_df = dataframes.get("customfield_field_new", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:

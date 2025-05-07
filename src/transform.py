@@ -8,6 +8,26 @@ from src.logging import start
 
 logger = start()
 
+def extract_summary_by_language(course_sections_df):
+    summary_dict = {"ptbr": None, "en": None}
+
+    filtered_df = course_sections_df[
+        (course_sections_df["section"] == 2) &
+        (course_sections_df["name"].isin(["Sobre o Curso", "About the Course"]))
+    ]
+
+    for _, row in filtered_df.iterrows():
+        name = row["name"]
+        summary = row["summary"]
+
+        if name == "Sobre o Curso":
+            summary_dict["ptbr"] = summary
+        elif name == "About the Course":
+            summary_dict["en"] = summary
+
+    return summary_dict
+
+
 
 def extract_href_or_src(html_text):  # if i need to return only htmls
     if not isinstance(html_text, str):
