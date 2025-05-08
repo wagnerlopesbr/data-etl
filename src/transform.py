@@ -33,12 +33,11 @@ def extract_content_from_summary(summary):
         return None
 
     original = summary
-    # Remove tags HTML e normaliza para análise
     cleaned = re.sub(r'<[^>]+>', '', original)
+    cleaned = cleaned.replace("&nbsp;", " ")
     cleaned = cleaned.replace("\n", " ").replace("\r", "").strip().lower()
 
-    # Lista de padrões possíveis para início do conteúdo
-    patterns = [
+    start_patterns = [
         r'4\s*[-.–]?\s*conteúdo programático[:\s]?',
         r'4\s*[-.–]?\s*conteúdo programaticos[:\s]?',
         r'4\s*[-.–]?\s*program content[:\s]?',
@@ -46,11 +45,18 @@ def extract_content_from_summary(summary):
         r'4\s*[-.–]?\s*course content[:\s]?'
     ]
 
-    for pattern in patterns:
+    end_patterns = [
+        r'4\s*[-.–]?\s*conteúdo programático[:\s]?',
+        r'4\s*[-.–]?\s*conteúdo programaticos[:\s]?',
+        r'4\s*[-.–]?\s*program content[:\s]?',
+        r'4\s*[-.–]?\s*syllabus[:\s]?',
+        r'4\s*[-.–]?\s*course content[:\s]?'
+    ]
+
+    for pattern in start_patterns:
         match = re.search(pattern, cleaned, re.IGNORECASE | re.DOTALL)
         if match:
-            # Pega trecho original a partir do padrão limpo
-            trecho = original[match.start():]
+            trecho = cleaned[match.start():]
             return trecho.strip()
 
     return None
