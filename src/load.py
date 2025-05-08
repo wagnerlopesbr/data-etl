@@ -652,10 +652,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
                     #logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
 
-                    ################# teste
-                    teste_df = pd.DataFrame()
-                    teste_df["conteudo_padronizado"] = course_sections_df["summary"].apply(extract_content_from_summary)
-                    logger.warning(f"\n\n\nAQUI @@@@@@@@@@@@@@@@@@@@@@\n\n\n{teste_df.to_string(index=False)}")
+                    ################# summary_df testing
+                    #summary_df_df = pd.DataFrame()
+                    #summary_df_df["conteudo_padronizado"] = course_sections_df["summary"].apply(extract_content_from_summary)
+                    #logger.warning(f"\n\n\nHERE @@@@@@@@@@@@@@@@@@@@@@\n\n\n{summary_df_df.to_string(index=False)}")
                     #######################
 
                     course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
