@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from src.logging import start
 from sqlalchemy import text
-from src.transform import transform_sequence
+from src.transform import transform_sequence, extract_content_from_summary
 from datetime import datetime
 
 
@@ -651,6 +651,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     #logger.warning(f"HERE ->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> {module_instance_mapping}")
 
                     #logger.debug(f"Updated sequences: {course_sections_df['sequence'].tolist()}")
+
+                    ################# teste
+                    teste_df = pd.DataFrame()
+                    teste_df["conteudo_padronizado"] = course_sections_df["summary"].apply(extract_content_from_summary)
+                    logger.warning(f"\n\n\nAQUI @@@@@@@@@@@@@@@@@@@@@@\n\n\n{teste_df.to_string(index=False)}")
+                    #######################
 
                     course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
                     logger.info(f"{len(course_sections_df)} section(s) inserted for course {new_course_id}.")

@@ -8,6 +8,7 @@ from src.logging import start
 
 logger = start()
 
+"""
 def extract_summary_by_language(course_sections_df):
     summary_dict = {"ptbr": None, "en": None}
 
@@ -26,6 +27,33 @@ def extract_summary_by_language(course_sections_df):
             summary_dict["en"] = summary
 
     return summary_dict
+"""
+def extract_content_from_summary(summary):
+    if not isinstance(summary, str):
+        return None
+
+    original = summary
+    # Remove tags HTML e normaliza para análise
+    cleaned = re.sub(r'<[^>]+>', '', original)
+    cleaned = cleaned.replace("\n", " ").replace("\r", "").strip().lower()
+
+    # Lista de padrões possíveis para início do conteúdo
+    patterns = [
+        r'4\s*[-.–]?\s*conteúdo programático[:\s]?',
+        r'4\s*[-.–]?\s*conteúdo programaticos[:\s]?',
+        r'4\s*[-.–]?\s*program content[:\s]?',
+        r'4\s*[-.–]?\s*syllabus[:\s]?',
+        r'4\s*[-.–]?\s*course content[:\s]?'
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, cleaned, re.IGNORECASE | re.DOTALL)
+        if match:
+            # Pega trecho original a partir do padrão limpo
+            trecho = original[match.start():]
+            return trecho.strip()
+
+    return None
 
 
 
