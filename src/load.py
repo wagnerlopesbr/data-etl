@@ -5,6 +5,9 @@ from src.logging import start
 from sqlalchemy import text
 from src.transform import transform_sequence, extract_content_from_summary
 from datetime import datetime
+from ftplib import FTP
+from dotenv import load_dotenv
+load_dotenv()
 
 
 logger = start()
@@ -20,6 +23,7 @@ def if_table_choice(table: str, df: pd.DataFrame):
 """
 
 # to do \/ ------------------------------------------------------------------
+"""
 def create_course_customfield_data_df():
     fieldid_mapping_old_to_new = {
         8: 7,
@@ -33,7 +37,44 @@ def create_course_customfield_data_df():
         6: 21,
         7: 22
     }
+"""
 
+def download_from_ftp(contenthash, contenttype, course_shortname):
+    local_dir = "src/customcert_images"
+    os.makedirs(local_dir, exist_ok=True)
+
+    folder1 = contenthash[:2]
+    folder2 = contenthash[2:4]
+    filename = contenthash
+
+    mimetype_mapping = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/svg+xml": ".svg",
+        "image/bmp": ".bmp",
+        "image/tiff": ".tiff",
+        "image/webp": ".webp",
+        "application/pdf": ".pdf",
+    }.get(contenttype, "")
+
+    ftp = FTP()
+    ftp.connect(os.getenv("FTP_HOST"), 21)
+    ftp.login(user=os.getenv("FTP_USER"), passwd=os.getenv("FTP_PASSWORD"))
+
+    base_dir = os.getenv("FTP_BASE_DIR")
+    ftp.cwd(f"{base_dir}/{folder1}/{folder2}")
+    remote_filename = contenthash
+    local_filename = f"conteudo_programatico_{course_shortname}{mimetype_mapping}"
+    local_path = os.path.join(local_dir, local_filename)
+    try:
+        with open(local_path, "wb") as local_file:
+            ftp.retrbinary(f"RETR {remote_filename}", local_file.write)
+    except Exception as e:
+        logger.error(f"Error downloading file {local_filename}: {e}")
+    finally:
+        ftp.quit()
+        logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
 # to do /\ ------------------------------------------------------------------
 
 
@@ -145,6 +186,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         customfield_field_old_df = dataframes.get("customfield_field_old", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
         customfield_field_new_df = dataframes.get("customfield_field_new", pd.DataFrame())
+        customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -152,6 +194,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         else:
             try:
                 course_copy = course.copy()
+                cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
+                if not cc_image_hash_df.empty:
+                    contenthash = cc_image_hash_df["contenthash"].iloc[0]
+                    contenttype = cc_image_hash_df["mimetype"].iloc[0]
+                    course_shortname = course_copy["shortname"].iloc[0]
+                    download_from_ftp(contenthash, contenttype, course_shortname)
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
