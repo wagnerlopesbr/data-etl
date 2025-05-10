@@ -175,3 +175,4 @@ cython_debug/
 
 /src/loaded/
 /src/logs/
+/src/customcert_images/
