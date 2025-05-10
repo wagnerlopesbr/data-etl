@@ -29,6 +29,28 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "label": f"SELECT * FROM {old_db_prefix}_label",
         "resource": f"SELECT * FROM {old_db_prefix}_resource",
         "reengagement": f"SELECT * FROM {old_db_prefix}_reengagement",
+        "customcert_image_hash_info": f"""
+                                            SELECT ctx.id AS context_id,
+                                                f.id as file_id,
+                                                e.id AS element_id,
+                                                f.filename,
+                                                f.contenthash,
+                                                p.id as page_id,
+                                                f.mimetype,
+                                                cc.course as course_id,
+                                                c.fullname
+                                            FROM {old_db_prefix}_customcert_elements e
+                                            INNER JOIN {old_db_prefix}_customcert_pages p ON p.id = e.pageid
+                                            INNER JOIN {old_db_prefix}_customcert_templates t ON t.id = p.templateid
+                                            INNER JOIN {old_db_prefix}_customcert cc ON cc.templateid = t.id
+                                            INNER JOIN {old_db_prefix}_context ctx ON ctx.id = t.contextid
+                                            INNER JOIN {old_db_prefix}_context cctx ON cctx.instanceid = cc.course
+                                            INNER JOIN {old_db_prefix}_course c ON c.id = cc.course
+                                            INNER JOIN {old_db_prefix}_files f ON f.component = 'mod_customcert' AND f.filearea = 'image' and f.mimetype like '%%image%%' and f.contextid = cctx.id
+                                            where e.name = 'conteúdo programático'
+                                            AND JSON_UNQUOTE(JSON_EXTRACT(e.data, '$.filename')) = f.filename
+                                            ORDER BY c.fullname ASC
+                                    """,
         #"hvp": f"SELECT * FROM {old_db_prefix}_hvp ORDER BY id ASC",
         "course_format_options": f"SELECT * FROM {old_db_prefix}_course_format_options ORDER BY sectionid ASC",
         "course_modules_sections": f"""
