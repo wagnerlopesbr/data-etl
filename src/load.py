@@ -7,6 +7,10 @@ from src.transform import transform_sequence, extract_content_from_summary
 from datetime import datetime
 from ftplib import FTP
 from dotenv import load_dotenv
+from PIL import Image
+import easyocr
+from langdetect import detect
+
 load_dotenv()
 
 
@@ -39,24 +43,12 @@ def create_course_customfield_data_df():
     }
 """
 
-def download_from_ftp(contenthash, contenttype, course_shortname):
+def download_from_ftp(contenthash, course_shortname):
     local_dir = "src/customcert_images"
     os.makedirs(local_dir, exist_ok=True)
 
     folder1 = contenthash[:2]
     folder2 = contenthash[2:4]
-    filename = contenthash
-
-    mimetype_mapping = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/gif": ".gif",
-        "image/svg+xml": ".svg",
-        "image/bmp": ".bmp",
-        "image/tiff": ".tiff",
-        "image/webp": ".webp",
-        "application/pdf": ".pdf",
-    }.get(contenttype, "")
 
     ftp = FTP()
     ftp.connect(os.getenv("FTP_HOST"), 21)
@@ -64,17 +56,64 @@ def download_from_ftp(contenthash, contenttype, course_shortname):
 
     base_dir = os.getenv("FTP_BASE_DIR")
     ftp.cwd(f"{base_dir}/{folder1}/{folder2}")
-    remote_filename = contenthash
-    local_filename = f"conteudo_programatico_{course_shortname}{mimetype_mapping}"
+    local_filename = f"conteudo_programatico_{course_shortname}.jpeg"
     local_path = os.path.join(local_dir, local_filename)
+    temp_path = os.path.join(local_dir, f"{contenthash}_temp")
     try:
-        with open(local_path, "wb") as local_file:
-            ftp.retrbinary(f"RETR {remote_filename}", local_file.write)
+        with open(temp_path, "wb") as temp_file:
+            ftp.retrbinary(f"RETR {contenthash}", temp_file.write)
+        with Image.open(temp_path) as img:
+            if img.mode == "RGBA":
+                background = Image.new("RGBA", img.size, (255, 255, 255))
+                img = Image.alpha_composite(background, img).convert("RGB")
+            else:
+                img = img.convert("RGB")
+            img.save(local_path, "JPEG", quality=95)
+        logger.info(f"File {local_filename} downloaded and converted successfully to {local_dir}.")
     except Exception as e:
         logger.error(f"Error downloading file {local_filename}: {e}")
     finally:
         ftp.quit()
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
         logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
+    extract_text_from_image(os.path.abspath(local_path))
+
+def extract_text_from_image(image_path):
+    reader = easyocr.Reader(['pt', 'en'], gpu=True)
+    result = reader.readtext(image_path, paragraph=False)
+    if not result:
+        print(f"No text found in image: {image_path}")
+        return
+
+    lang_blocks = {"pt": [], "en": []}
+    confidences = {"pt": [], "en": []}
+    for _, text, conf in result:
+        text = text.strip()
+        if not text:
+            continue
+        try:
+            lang = detect(text)
+            if lang in lang_blocks:
+                lang_blocks[lang].append(text)
+                confidences[lang].append(conf)
+        except Exception as e:
+            print(f"Language detection failed: {e}")
+
+    # Diretório de saída dos .txt
+    base = os.path.splitext(os.path.basename(image_path))[0]
+    output_dir = os.path.join("src", "customcert_texts", base)
+    os.makedirs(output_dir, exist_ok=True)
+
+    for lang_code, blocks in lang_blocks.items():
+        if blocks:
+            content = " ".join(blocks)
+            avg_conf = sum(confidences[lang_code]) / len(confidences[lang_code])
+            logger.info(f"Extracted text in {lang_code.upper()} (avg confidence {avg_conf:.2f}):\n{content}")
+            output_path = os.path.join(output_dir, f"{base}_{lang_code}.txt")
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"Saved: {output_path}")
 # to do /\ ------------------------------------------------------------------
 
 
@@ -197,9 +236,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
                 if not cc_image_hash_df.empty:
                     contenthash = cc_image_hash_df["contenthash"].iloc[0]
-                    contenttype = cc_image_hash_df["mimetype"].iloc[0]
                     course_shortname = course_copy["shortname"].iloc[0]
-                    download_from_ftp(contenthash, contenttype, course_shortname)
+                    download_from_ftp(contenthash, course_shortname)
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
@@ -808,7 +846,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 399, 400], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
