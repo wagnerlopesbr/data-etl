@@ -86,34 +86,30 @@ def extract_text_from_image(image_path):
         print(f"No text found in image: {image_path}")
         return
 
-    lang_blocks = {"pt": [], "en": []}
-    confidences = {"pt": [], "en": []}
+    texts = []
+    confidences = []
     for _, text, conf in result:
         text = text.strip()
-        if not text:
-            continue
-        try:
-            lang = detect(text)
-            if lang in lang_blocks:
-                lang_blocks[lang].append(text)
-                confidences[lang].append(conf)
-        except Exception as e:
-            print(f"Language detection failed: {e}")
+        if text:
+            texts.append(text)
+            confidences.append(conf)
 
-    # Diretório de saída dos .txt
+    # Output directory and filename
     base = os.path.splitext(os.path.basename(image_path))[0]
     output_dir = os.path.join("src", "customcert_texts", base)
     os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"{base}.txt")
 
-    for lang_code, blocks in lang_blocks.items():
-        if blocks:
-            content = " ".join(blocks)
-            avg_conf = sum(confidences[lang_code]) / len(confidences[lang_code])
-            logger.info(f"Extracted text in {lang_code.upper()} (avg confidence {avg_conf:.2f}):\n{content}")
-            output_path = os.path.join(output_dir, f"{base}_{lang_code}.txt")
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            print(f"Saved: {output_path}")
+    # Combine all blocks into one string
+    content = "\n".join(texts)
+    avg_conf = sum(confidences) / len(confidences) if confidences else 0
+
+    logger.info(f"Extracted text (avg confidence {avg_conf:.2f}):\n{content}")
+    
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    print(f"Saved: {output_path}")
 # to do /\ ------------------------------------------------------------------
 
 
@@ -829,7 +825,7 @@ def get_unique_filename(output_dir: str) -> str:
 
 
 def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
-    logger.debug(f"Starting the loading process...")
+    logger.debug(f"-------------------- Starting the loading process... --------------------")
 
     output_dir = "src/loaded"
     os.makedirs(output_dir, exist_ok=True)
@@ -846,7 +842,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399, 400], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 222], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
@@ -859,4 +855,4 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
             logger.info(f"File successfully saved: {os.path.basename(output_path)}.")
         except Exception as e:
             logger.error(f"Error creating the xlsx file: {e}.")
-    logger.info(f"End of loading process.")
+    logger.info(f"-------------------- End of loading process. --------------------")
