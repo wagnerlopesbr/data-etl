@@ -6,7 +6,7 @@ logger = start()
 
 
 def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
-    logger.debug(f"Starting the extraction process...")
+    logger.debug(f"-------------------- Starting the extraction process... --------------------")
     
     old_queries = {
         "context_course": f"SELECT * FROM {old_db_prefix}_context WHERE contextlevel = 50",
@@ -119,5 +119,5 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         except Exception as e:
             logger.error(f"Error extracting {table.upper()} from NEW DB: {e}.")
             
-    logger.info(f"End of extraction process.")
+    logger.info(f"-------------------- End of extraction process. --------------------")
     return dataframes
