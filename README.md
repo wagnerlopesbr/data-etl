@@ -3,7 +3,7 @@
 ## Note
 Requires Python's 3.11 version.
 
-## Running
+## Setting the project up
 If it's your first time running the project on your computer, run:
 ```bash
 ./requirements.sh
@@ -20,3 +20,8 @@ source .venv/bin/activate
 ```bash
 source .venv/bin/activate
 ```
+
+### reminder (to Wagner; to be deleted)
+- work on 'customcert' template language distinction based on course shortname (ends or starts with "EN" or not)
+- insert 'customfield' based on old db data
+- course_df.to_list() to use as parameter in 'if_table_course' function

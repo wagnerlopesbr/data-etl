@@ -9,7 +9,8 @@ from ftplib import FTP
 from dotenv import load_dotenv
 from PIL import Image
 import easyocr
-from langdetect import detect
+import cv2
+
 
 load_dotenv()
 
@@ -43,7 +44,7 @@ def create_course_customfield_data_df():
     }
 """
 
-def download_from_ftp(contenthash, course_shortname):
+def download_from_ftp(contenthash, course_shortname, course_original_id):
     local_dir = "src/customcert_images"
     os.makedirs(local_dir, exist_ok=True)
 
@@ -77,39 +78,55 @@ def download_from_ftp(contenthash, course_shortname):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
-    extract_text_from_image(os.path.abspath(local_path))
+    extract_text_from_image(os.path.abspath(local_path), course_original_id)
 
-def extract_text_from_image(image_path):
+def extract_text_from_image(image_path, course_original_id):
     reader = easyocr.Reader(['pt', 'en'], gpu=True)
-    result = reader.readtext(image_path, paragraph=False)
-    if not result:
-        print(f"No text found in image: {image_path}")
-        return
+    left_img, right_img = split_image(image_path)
+    left_text, left_conf = text_extract(left_img, reader)
+    right_text, right_conf = text_extract(right_img, reader)
+    full_text = f"{left_text}\n\n\n{right_text}"
+    full_conf = (left_conf + right_conf) / 2
+    base = os.path.splitext(os.path.basename(image_path))[0]
+    output_dir = os.path.join("src", "customcert_texts", base)
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"{course_original_id}_{base}.txt")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(full_text)
+    
+    for temp_img in (left_img, right_img):
+        try:
+            if os.path.exists(temp_img):
+                os.remove(temp_img)
+                logger.info(f"Temporary file deleted: {temp_img}")
+        except Exception as e:
+            logger.error(f"Error deleting temporary image {temp_img}: {e}")
 
-    texts = []
-    confidences = []
+    logger.info(f"Extracted text (avg confidence {full_conf:.2f}) saved to: {output_path}")
+
+def split_image(path):
+    img = cv2.imread(path)
+    h, w = img.shape[:2]
+    middle = w // 2
+    ext = os.path.splitext(path)[1]
+    left_path = path.replace(ext, f"_left{ext}")
+    right_path = path.replace(ext, f"_right{ext}")
+    cv2.imwrite(left_path, img[:, :middle])
+    cv2.imwrite(right_path, img[:, middle:])
+    return left_path, right_path
+
+def text_extract(path, reader):
+    result = reader.readtext(path, paragraph=False)
+    texts, confidences = [], []
     for _, text, conf in result:
         text = text.strip()
         if text:
             texts.append(text)
             confidences.append(conf)
-
-    # Output directory and filename
-    base = os.path.splitext(os.path.basename(image_path))[0]
-    output_dir = os.path.join("src", "customcert_texts", base)
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{base}.txt")
-
-    # Combine all blocks into one string
     content = "\n".join(texts)
     avg_conf = sum(confidences) / len(confidences) if confidences else 0
+    return content, avg_conf
 
-    logger.info(f"Extracted text (avg confidence {avg_conf:.2f}):\n{content}")
-    
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    print(f"Saved: {output_path}")
 # to do /\ ------------------------------------------------------------------
 
 
@@ -233,7 +250,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 if not cc_image_hash_df.empty:
                     contenthash = cc_image_hash_df["contenthash"].iloc[0]
                     course_shortname = course_copy["shortname"].iloc[0]
-                    download_from_ftp(contenthash, course_shortname)
+                    course_original_id = course_copy["id"].iloc[0]
+                    download_from_ftp(contenthash, course_shortname, course_original_id)
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
