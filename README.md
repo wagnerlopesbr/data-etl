@@ -22,6 +22,5 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- work on 'customcert' template language distinction based on course shortname (ends or starts with "EN" or not)
-- insert 'customfield' based on old db data
+- download hvp content to migrate created games
 - course_df.to_list() to use as parameter in 'if_table_course' function

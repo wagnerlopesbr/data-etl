@@ -27,12 +27,9 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
-"""
-def create_course_customfield_data_df():
+def create_course_customfield_data_df(new_course_id, new_course_context_id, customfield_data_df, image_text=None):
     fieldid_mapping_old_to_new = {
         8: 7,
-        'NULL': 14,
-        'NULL': 15,
         1: 16,
         2: 17,
         3: 18,
@@ -41,7 +38,72 @@ def create_course_customfield_data_df():
         6: 21,
         7: 22
     }
-"""
+
+    valid_old_field_ids = set(fieldid_mapping_old_to_new.keys())
+    filtered_df = customfield_data_df[customfield_data_df["fieldid"].isin(valid_old_field_ids)].copy()
+
+    if filtered_df.empty:
+        logger.warning(f"No customfield_data found for course {new_course_id}.")
+        filtered_df = pd.DataFrame(columns=[
+            'fieldid',
+            'instanceid',
+            'intvalue',
+            'decvalue',
+            'shortcharvalue',
+            'charvalue',
+            'value',
+            'valueformat',
+            'valuetrust',
+            'timecreated',
+            'timemodified',
+            'contextid'
+        ])
+    else:
+        filtered_df["fieldid"] = filtered_df["fieldid"].map(fieldid_mapping_old_to_new)
+        filtered_df["instanceid"] = new_course_id
+        filtered_df["contextid"] = new_course_context_id
+        filtered_df["timecreated"] = timestamp
+        filtered_df["timemodified"] = timestamp
+        filtered_df["valuetrust"] = filtered_df["fieldid"].apply(lambda fid: 0 if fid in [7, 22] else 1)
+
+    if image_text:
+        new_row = {
+            'fieldid': 14,
+            'instanceid': new_course_id,
+            'intvalue': None,
+            'decvalue': None,
+            'shortcharvalue': None,
+            'charvalue': None,
+            'value': image_text,
+            'valueformat': 0,
+            'valuetrust': 1,
+            'timecreated': timestamp,
+            'timemodified': timestamp,
+            'contextid': new_course_context_id
+        }
+        new_row_df = pd.DataFrame([new_row])
+        if filtered_df.empty:
+            filtered_df = pd.DataFrame(columns=new_row_df.columns).astype(new_row_df.dtypes.to_dict())
+        new_row_df = new_row_df.astype(filtered_df.dtypes.to_dict())
+        filtered_df = pd.concat([filtered_df, new_row_df], ignore_index=True)
+
+    final_columns = [
+        'fieldid',
+        'instanceid',
+        'intvalue',
+        'decvalue',
+        'shortcharvalue',
+        'charvalue',
+        'value',
+        'valueformat',
+        'valuetrust',
+        'timecreated',
+        'timemodified',
+        'contextid'
+    ]
+    
+    return filtered_df[final_columns]
+
 
 def download_from_ftp(contenthash, course_shortname, course_original_id):
     local_dir = "src/customcert_images"
@@ -59,6 +121,9 @@ def download_from_ftp(contenthash, course_shortname, course_original_id):
     local_filename = f"conteudo_programatico_{course_shortname}.jpeg"
     local_path = os.path.join(local_dir, local_filename)
     temp_path = os.path.join(local_dir, f"{contenthash}_temp")
+
+    image_text = None
+
     try:
         with open(temp_path, "wb") as temp_file:
             ftp.retrbinary(f"RETR {contenthash}", temp_file.write)
@@ -70,6 +135,7 @@ def download_from_ftp(contenthash, course_shortname, course_original_id):
                 img = img.convert("RGB")
             img.save(local_path, "JPEG", quality=95)
         logger.info(f"File {local_filename} downloaded and converted successfully to {local_dir}.")
+        image_text = extract_text_from_image(os.path.abspath(local_path), course_original_id)
     except Exception as e:
         logger.error(f"Error downloading file {local_filename}: {e}")
     finally:
@@ -77,7 +143,7 @@ def download_from_ftp(contenthash, course_shortname, course_original_id):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
-    extract_text_from_image(os.path.abspath(local_path), course_original_id)
+    return image_text
 
 def extract_text_from_image(image_path, course_original_id):
     reader = easyocr.Reader(['pt', 'en'], gpu=True)
@@ -102,6 +168,7 @@ def extract_text_from_image(image_path, course_original_id):
             logger.error(f"Error deleting temporary image {temp_img}: {e}")
 
     logger.info(f"Extracted text (avg confidence {full_conf:.2f}) saved to: {output_path}")
+    return full_text
 
 def split_image(path):
     img = cv2.imread(path)
@@ -267,10 +334,11 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 course_copy = course.copy()
                 cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
                 course_shortname = course_copy["shortname"].iloc[0]
+                image_text = None
                 if not cc_image_hash_df.empty:
                     contenthash = cc_image_hash_df["contenthash"].iloc[0]
                     course_original_id = course_copy["id"].iloc[0]
-                    download_from_ftp(contenthash, course_shortname, course_original_id)
+                    image_text = download_from_ftp(contenthash, course_shortname, course_original_id)
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
@@ -307,6 +375,15 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 ))
                 new_course_context_id = result.scalar()
                 logger.info(f"NEW COURSE CONTEXT ID inserted successfully! NEW COURSE CONTEXT ID: {new_course_context_id}")
+                cf_data_df = customfield_data_old_df[customfield_data_old_df["instanceid"] == id].copy()
+                cf_data_df = cf_data_df.drop(columns=["id"])
+                customfield_data_df = create_course_customfield_data_df(new_course_id, new_course_context_id, cf_data_df, image_text)
+                if not customfield_data_df.empty:
+                    try:
+                        customfield_data_df.to_sql(customfield_data_table, conn, if_exists="append", index=False)
+                        logger.info(f"{len(customfield_data_df)} customfield_data(s) inserted for course {new_course_id}.")
+                    except Exception as e:
+                        logger.error(f"Error inserting CUSTOMFIELD_DATA for course {new_course_id}: {e}")
                 path = f"/1/{context_category_id}/{new_course_context_id}"
                 conn.execute(text(
                     f"""
@@ -882,7 +959,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
