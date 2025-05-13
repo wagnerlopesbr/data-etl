@@ -27,7 +27,6 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
-# to do \/ ------------------------------------------------------------------
 """
 def create_course_customfield_data_df():
     fieldid_mapping_old_to_new = {
@@ -127,11 +126,8 @@ def text_extract(path, reader):
     avg_conf = sum(confidences) / len(confidences) if confidences else 0
     return content, avg_conf
 
-# to do /\ ------------------------------------------------------------------
-
-
-def create_customcert_instance_df(new_course_id):
-    default_customcert_df = pd.DataFrame([{
+def create_customcert_instance_df(new_course_id, course_shortname):
+    default_customcert_df_PTBR = pd.DataFrame([{
         'course': new_course_id,
         'templateid': 0,
         'name': "Certificado de Conclusão",
@@ -149,7 +145,30 @@ def create_customcert_instance_df(new_course_id):
         'timecreated': timestamp,
         'timemodified': timestamp
     }])
-    return default_customcert_df
+
+    default_customcert_df_EN = pd.DataFrame([{
+        'course': new_course_id,
+        'templateid': 0,
+        'name': "Certificate of Completion",
+        'intro': """
+                    <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Increase your chances in the job market by adding your certificate to LinkedIn through the button:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"> <img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="LinkedIn Button to Add to Profile"> </a></p>
+                 """,
+        'introformat': 1,
+        'requiredtime': 1,
+        'verifyany': 1,
+        'deliveryoption': 'I',
+        'emailstudents': 1,
+        'emailteachers': 0,
+        'emailothers': 'certificado@talisma.seg.br',
+        'protection': 'modify',
+        'timecreated': timestamp,
+        'timemodified': timestamp
+    }])
+
+    upper_shortname = course_shortname.upper()
+    if upper_shortname.startswith("EN") or upper_shortname.endswith("EN"):
+        return default_customcert_df_EN
+    return default_customcert_df_PTBR
 
 def create_customcert_template_df(df, contextid, course_shortname):
     df["name"] = f"Template {course_shortname}"
@@ -247,9 +266,9 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
             try:
                 course_copy = course.copy()
                 cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
+                course_shortname = course_copy["shortname"].iloc[0]
                 if not cc_image_hash_df.empty:
                     contenthash = cc_image_hash_df["contenthash"].iloc[0]
-                    course_shortname = course_copy["shortname"].iloc[0]
                     course_original_id = course_copy["id"].iloc[0]
                     download_from_ftp(contenthash, course_shortname, course_original_id)
                 course_copy["category"] = category
@@ -501,7 +520,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         logger.warning(f"No HVP entries found for course {id}.")
                 """
 
-                customcert_df = create_customcert_instance_df(new_course_id)
+                customcert_df = create_customcert_instance_df(new_course_id, course_shortname)
                 customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
                 customcert_instance_id = conn.execute(
                     text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"),
@@ -687,13 +706,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ).scalar()
                     logger.info(f"NEW CUSTOMCERT CM CONTEXT ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT CM CONTEXT ID: {customcert_cm_context_id}")
 
-                    shortname = conn.execute(text(
-                        f"SELECT shortname FROM {prefixed_table} WHERE id = :course_id"),
-                        {"course_id": new_course_id}
-                    ).scalar()
-                    logger.info(f"NEW COURSE SHORTNAME inserted successfully! OLD COURSE ID: {id} | NEW COURSE SHORTNAME: {shortname}")
-
-                    customcert_template_df = create_customcert_template_df(cc_templates_br_df.copy(), customcert_cm_context_id, shortname)
+                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                        customcert_template_df = create_customcert_template_df(cc_templates_en_df.copy(), customcert_cm_context_id, course_shortname)
+                    else:
+                        customcert_template_df = create_customcert_template_df(cc_templates_br_df.copy(), customcert_cm_context_id, course_shortname)
                     customcert_template_df.to_sql(f"{cc_templates_table}", conn, if_exists="append", index=False)
                     customcert_template_id = conn.execute(
                         text(f"SELECT id FROM {cc_templates_table} WHERE contextid = :context_id ORDER BY id DESC LIMIT 1"),
@@ -709,7 +725,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     )
                     logger.info(f"NEW CUSTOMCERT TEMPLATE ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT TEMPLATE ID: {customcert_template_id}")
 
-                    customcert_pages_df = create_customcert_page_df(cc_pages_br_df.copy(), customcert_template_id)
+                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                        customcert_pages_df = create_customcert_page_df(cc_pages_en_df.copy(), customcert_template_id)
+                    else:
+                        customcert_pages_df = create_customcert_page_df(cc_pages_br_df.copy(), customcert_template_id)
                     customcert_pages_df.to_sql(f"{cc_pages_table}", conn, if_exists="append", index=False)
                     customcert_pages_ids = conn.execute(
                         text(f"SELECT id FROM {cc_pages_table} WHERE templateid = :templateid ORDER BY id, sequence ASC"),
@@ -718,7 +737,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     cc_pages_ids = [row[0] for row in customcert_pages_ids]
                     logger.info(f"NEW CUSTOMCERT PAGES IDS inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT PAGES IDS: {cc_pages_ids}")
                     
-                    customcert_elements_df = create_customcert_elements_df(cc_elements_br_df.copy(), cc_pages_ids)
+                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                        customcert_elements_df = create_customcert_elements_df(cc_elements_en_df.copy(), cc_pages_ids)
+                    else:
+                        customcert_elements_df = create_customcert_elements_df(cc_elements_br_df.copy(), cc_pages_ids)
                     customcert_elements_df.to_sql(f"{cc_elements_table}", conn, if_exists="append", index=False)
                     customcert_elements_ids = conn.execute(
                         text(f"SELECT id FROM {cc_elements_table} WHERE pageid IN :pageids ORDER BY id, sequence ASC"),
@@ -860,7 +882,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 222], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
