@@ -56,7 +56,7 @@ def main():
         # - old_engine.connect(): read-only, better for performance (no locking/transactions)
         # - new_engine.begin(): transactional, used for write operations (auto commit/rollback)
         
-        with old_engine.connect() as old_conn, new_engine.begin() as new_conn:  # .connect to reading (no transactions and locks, better performance) // .begin to load (starting transaction -> require commit/rollback)
+        with old_engine.connect() as old_conn, new_engine.begin() as new_conn:
             dataframes = extract(old_conn, new_conn, old_db.prefix, new_db.prefix)
             dataframes = transform(dataframes)
             load(dataframes, new_conn, new_db)
