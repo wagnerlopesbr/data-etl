@@ -8,60 +8,6 @@ from src.logging import start
 
 logger = start()
 
-"""
-def extract_summary_by_language(course_sections_df):
-    summary_dict = {"ptbr": None, "en": None}
-
-    filtered_df = course_sections_df[
-        (course_sections_df["section"] == 2) &
-        (course_sections_df["name"].isin(["Sobre o Curso", "About the Course"]))
-    ]
-
-    for _, row in filtered_df.iterrows():
-        name = row["name"]
-        summary = row["summary"]
-
-        if name == "Sobre o Curso":
-            summary_dict["ptbr"] = summary
-        elif name == "About the Course":
-            summary_dict["en"] = summary
-
-    return summary_dict
-"""
-def extract_content_from_summary(summary):
-    if not isinstance(summary, str):
-        return None
-
-    original = summary
-    cleaned = re.sub(r'<[^>]+>', '', original)
-    cleaned = cleaned.replace("&nbsp;", " ")
-    cleaned = cleaned.replace("\n", " ").replace("\r", "").strip().lower()
-
-    start_patterns = [
-        r'4\s*[-.–]?\s*conteúdo programático[:\s]?',
-        r'4\s*[-.–]?\s*conteúdo programaticos[:\s]?',
-        r'4\s*[-.–]?\s*program content[:\s]?',
-        r'4\s*[-.–]?\s*syllabus[:\s]?',
-        r'4\s*[-.–]?\s*course content[:\s]?'
-    ]
-
-    end_patterns = [
-        r'4\s*[-.–]?\s*conteúdo programático[:\s]?',
-        r'4\s*[-.–]?\s*conteúdo programaticos[:\s]?',
-        r'4\s*[-.–]?\s*program content[:\s]?',
-        r'4\s*[-.–]?\s*syllabus[:\s]?',
-        r'4\s*[-.–]?\s*course content[:\s]?'
-    ]
-
-    for pattern in start_patterns:
-        match = re.search(pattern, cleaned, re.IGNORECASE | re.DOTALL)
-        if match:
-            trecho = cleaned[match.start():]
-            return trecho.strip()
-
-    return None
-
-
 
 def extract_href_or_src(html_text):  # if i need to return only htmls
     if not isinstance(html_text, str):
