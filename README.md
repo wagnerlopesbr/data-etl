@@ -22,5 +22,6 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
+- migrate quizzes questions
 - download hvp content to migrate created games
 - course_df.to_list() to use as parameter in 'if_table_course' function
