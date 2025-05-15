@@ -23,6 +23,8 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "choice": f"SELECT * FROM {old_db_prefix}_choice ORDER BY id ASC",
         "choice_options": f"SELECT * FROM {old_db_prefix}_choice_options ORDER BY choiceid ASC",
         "quiz": f"SELECT * FROM {old_db_prefix}_quiz",
+        "quiz_slots": f"SELECT * FROM {old_db_prefix}_quiz_slots",
+        "quiz_sections": f"SELECT * FROM {old_db_prefix}_quiz_sections ORDER BY quizid ASC",
         "question_categories": f"SELECT * FROM {old_db_prefix}_question_categories",
         "question": f"SELECT * FROM {old_db_prefix}_question",
         "question_answers": f"SELECT * FROM {old_db_prefix}_question_answers",
