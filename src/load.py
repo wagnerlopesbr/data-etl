@@ -294,6 +294,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     quiz_sections_table = f"{new_db.prefix}_quiz_sections"
     question_bank_entries_table = f"{new_db.prefix}_question_bank_entries"
     question_versions_table = f"{new_db.prefix}_question_versions"
+    question_references_table = f"{new_db.prefix}_question_references"
     
     module_instance_mapping = {}
 
@@ -917,6 +918,80 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             """),
                             {"path": path_cm, "id": new_cm_context_id})
                     logger.info(f"{len(course_modules_filtered_df)} course_modules inserted.")
+
+
+                # Create question references
+                question_references_data = []
+
+                for old_slot_id, new_slot_id in quiz_slots_mapping.items():
+                    # Obter o old_question_id do slot original
+                    slot_row = quiz_slots_df[quiz_slots_df["id"] == old_slot_id]
+                    if slot_row.empty:
+                        logger.warning(f"Slot ID {old_slot_id} not found in original quiz_slots_df.")
+                        continue
+
+                    old_question_id = slot_row["questionid"].values[0]
+                    new_question_id = question_instance_mapping.get(old_question_id)
+
+                    if not new_question_id:
+                        logger.warning(f"No new question ID found for old question ID {old_question_id}. Skipping slot {new_slot_id}.")
+                        continue
+
+                    questionbankentryid = question_bank_entry_mapping.get(new_question_id)
+                    if not questionbankentryid:
+                        logger.warning(f"No question bank entry found for question ID {new_question_id}. Skipping slot {new_slot_id}.")
+                        continue
+
+                    # Encontrar o contextid do course_module correspondente ao quiz
+                    quiz_id = slot_row["quizid"].values[0]
+                    new_quiz_id = quiz_instance_mapping.get(quiz_id)
+
+                    if not new_quiz_id:
+                        logger.warning(f"No new quiz ID found for old quiz ID {quiz_id}. Skipping.")
+                        continue
+
+                    cm_id = conn.execute(text(f"""
+                        SELECT id FROM {course_modules_table}
+                        WHERE course = :course_id AND module = 17 AND instance = :instance
+                        ORDER BY id DESC LIMIT 1
+                    """), {
+                        "course_id": new_course_id,
+                        "instance": new_quiz_id
+                    }).scalar()
+
+                    if not cm_id:
+                        logger.warning(f"No CM ID found for quiz {new_quiz_id}. Skipping.")
+                        continue
+
+                    cm_context_id = conn.execute(text(f"""
+                        SELECT id FROM {context_table}
+                        WHERE contextlevel = 70 AND instanceid = :cm_id
+                        ORDER BY id DESC LIMIT 1
+                    """), {
+                        "cm_id": cm_id
+                    }).scalar()
+
+                    if not cm_context_id:
+                        logger.warning(f"No context ID found for cm_id {cm_id}. Skipping.")
+                        continue
+
+                    question_references_data.append({
+                        "usingcontextid": cm_context_id,
+                        "component": "mod_quiz",
+                        "questionarea": "slot",
+                        "itemid": new_slot_id,
+                        "questionbankentryid": questionbankentryid
+                    })
+
+                # Inserir no banco
+                if question_references_data:
+                    question_references_df = pd.DataFrame(question_references_data)
+                    try:
+                        question_references_df.to_sql(question_references_table, conn, if_exists="append", index=False)
+                        logger.info(f"{len(question_references_df)} question references inserted for course {new_course_id}.")
+                    except Exception as e:
+                        logger.error(f"Error inserting QUESTION_REFERENCES for course {new_course_id}: {e}")
+
 
                 if not customcert_df.empty:
                     customcert_cm_id = conn.execute(text(
