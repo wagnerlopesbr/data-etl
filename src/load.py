@@ -2,7 +2,7 @@ from typing import Dict, List
 import pandas as pd
 import os
 from src.logging import start
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from src.transform import transform_sequence
 from datetime import datetime
 from ftplib import FTP
@@ -103,7 +103,6 @@ def create_course_customfield_data_df(new_course_id, new_course_context_id, cust
     ]
     
     return filtered_df[final_columns]
-
 
 def download_from_ftp(contenthash, course_shortname, course_original_id):
     local_dir = "src/customcert_images"
@@ -287,8 +286,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     cc_templates_table = f"{new_db.prefix}_customcert_templates"
     cc_elements_table = f"{new_db.prefix}_customcert_elements"
     cc_pages_table = f"{new_db.prefix}_customcert_pages"
-    customfield_field_table = f"{new_db.prefix}_customfield_field"
     customfield_data_table = f"{new_db.prefix}_customfield_data"
+    question_categories_table = f"{new_db.prefix}_question_categories"
+    question_table = f"{new_db.prefix}_question"
+    question_answers_table = f"{new_db.prefix}_question_answers"
+    quiz_slots_table = f"{new_db.prefix}_quiz_slots"
+    quiz_sections_table = f"{new_db.prefix}_quiz_sections"
+    question_bank_entries_table = f"{new_db.prefix}_question_bank_entries"
+    question_versions_table = f"{new_db.prefix}_question_versions"
     
     module_instance_mapping = {}
 
@@ -321,10 +326,14 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
-        customfield_field_old_df = dataframes.get("customfield_field_old", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
-        customfield_field_new_df = dataframes.get("customfield_field_new", pd.DataFrame())
         customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
+        question_categories_df = dataframes.get("question_categories", pd.DataFrame())
+        question_df = dataframes.get("question", pd.DataFrame())
+        question_answers_df = dataframes.get("question_answers", pd.DataFrame())
+        quiz_slots_df = dataframes.get("quiz_slots", pd.DataFrame())
+        courses_context_df = dataframes.get("context_course", pd.DataFrame())
+        quiz_sections_df = dataframes.get("quiz_sections", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -332,6 +341,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         else:
             try:
                 course_copy = course.copy()
+                course_old_context_id = courses_context_df[courses_context_df["instanceid"] == id]["id"].iloc[0]
                 cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
                 course_shortname = course_copy["shortname"].iloc[0]
                 image_text = None
@@ -393,6 +403,25 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     """
                 ))
 
+                question_category_mapping = {}
+
+                if not question_categories_df.empty:
+                    question_categories_filtered = question_categories_df[question_categories_df["contextid"] == course_old_context_id].copy()
+                    if not question_categories_filtered.empty:
+                        old_question_category_ids = question_categories_filtered["id"].tolist()
+                        question_categories_filtered["contextid"] = new_course_context_id
+                        question_categories_filtered = question_categories_filtered.drop(columns=["id"])
+                        try:
+                            question_categories_filtered.to_sql(question_categories_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {question_categories_table} WHERE contextid = :new_course_context_id ORDER BY id"), {"new_course_context_id": new_course_context_id}).fetchall()
+                            new_question_category_ids = [row[0] for row in result]
+                            question_category_mapping.update(dict(zip(old_question_category_ids, new_question_category_ids)))
+                            logger.info(f"{len(question_categories_filtered)} question category(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUESTION_CATEGORY for course {new_course_id}: {e}")
+                        else:
+                            logger.warning(f"No QUESTION_CATEGORY entries found for course {id}.")
+                
                 choice_instance_mapping = {}
 
                 if not choice_df.empty:
@@ -538,6 +567,125 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     else:
                         logger.warning(f"No QUIZ entries found for course {id}.")
                 
+                quiz_sections_mapping = {}
+
+                if not quiz_sections_df.empty:
+                    quiz_sections_filtered = quiz_sections_df[quiz_sections_df["quizid"].isin(quiz_instance_mapping.keys())].copy()
+                    if not quiz_sections_filtered.empty:
+                        old_quiz_section_ids = quiz_sections_filtered["id"].tolist()
+                        quiz_sections_filtered["quizid"] = quiz_sections_filtered["quizid"].map(quiz_instance_mapping)
+                        quiz_sections_filtered = quiz_sections_filtered.drop(columns=["id"])
+                        try:
+                            quiz_sections_filtered.to_sql(quiz_sections_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {quiz_sections_table} WHERE quizid IN :q_ids ORDER BY id"), {"q_ids": tuple(quiz_instance_mapping.values())}).fetchall()
+                            new_quiz_section_ids = [row[0] for row in result]
+                            quiz_sections_mapping.update(dict(zip(old_quiz_section_ids, new_quiz_section_ids)))
+                            logger.info(f"{len(quiz_sections_filtered)} quiz section(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUIZ_SECTIONS for course {new_course_id}: {e}")
+
+                question_instance_mapping = {}
+
+                if not question_df.empty:
+                    questions_filtered = question_df[(question_df["category"].isin(question_category_mapping.keys()))].copy()
+                    if not questions_filtered.empty:
+                        old_question_ids = questions_filtered["id"].tolist()
+                        questions_filtered["unique_key"] = questions_filtered["name"] + "_tag_" + questions_filtered["stamp"]
+                        unique_keys = questions_filtered["unique_key"].tolist()
+                        questions_filtered = questions_filtered.drop(columns=["id", "category", "version", "hidden", "idnumber", "unique_key"])
+                        try:
+                            questions_filtered.to_sql(question_table, conn, if_exists="append", index=False)
+                            stmt = text(f"SELECT id, CONCAT(name, '_tag_', stamp) AS unique_key FROM {question_table} WHERE CONCAT(name, '_tag_', stamp) IN :keys")
+                            stmt = stmt.bindparams(bindparam("keys", expanding=True))
+                            result = conn.execute(stmt, {"keys": unique_keys}).fetchall()
+                            db_key_to_id = {row[1]: row[0] for row in result}  # 1: unique_key, 0: id
+                            question_instance_mapping = {
+                                old_id: db_key_to_id.get(key)
+                                for old_id, key in zip(old_question_ids, unique_keys)
+                                if key in db_key_to_id
+                            }
+                            logger.info(f"{len(questions_filtered)} question(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUESTION for course {new_course_id}: {e}")
+                
+                question_bank_entry_mapping = {}
+
+                if question_instance_mapping:
+                    bank_entries = []
+                    for old_question_id, new_question_id in question_instance_mapping.items():
+                        original_question_id = question_df.loc[question_df["id"] == old_question_id].iloc[0]
+                        old_category_id = original_question_id["category"]
+                        new_category_id = question_category_mapping.get(old_category_id)
+                        ownerid = 2
+                        bank_entries.append({
+                            "questioncategoryid": new_category_id,
+                            "ownerid": ownerid
+                        })
+                    
+                    try:
+                        df_bank = pd.DataFrame(bank_entries)    
+                        df_bank.to_sql(question_bank_entries_table, conn, if_exists="append", index=False)
+                        result = conn.execute(text(f"SELECT id FROM {question_bank_entries_table} WHERE questioncategoryid IN :cat_ids ORDER BY id"),
+                                            {"cat_ids": tuple(question_category_mapping.values())}).fetchall()
+                        new_bank_entry_ids = [row[0] for row in result]
+                        question_bank_entry_mapping = dict(zip(question_instance_mapping.values(), new_bank_entry_ids))
+                        logger.info(f"{len(df_bank)} question_bank_entries inserted for course {new_course_id}.")
+                    except Exception as e:
+                        logger.error(f"Error inserting QUESTION_BANK_ENTRIES for course {new_course_id}: {e}")
+
+                if question_instance_mapping:
+                    version_entries = []
+                    for new_question_id in question_instance_mapping.values():
+                        question_entry_id = question_bank_entry_mapping.get(new_question_id)
+                        version_entries.append({
+                            "questionbankentryid": question_entry_id,
+                            "version": 1,
+                            "questionid": new_question_id,
+                            "status": "ready"
+                        })
+
+                    try:
+                        df_versions = pd.DataFrame(version_entries)
+                        df_versions.to_sql(question_versions_table, conn, if_exists="append", index=False)
+                        logger.info(f"{len(df_versions)} question_versions inserted for course {new_course_id}.")
+                    except Exception as e:
+                        logger.error(f"Error inserting QUESTION_VERSIONS for course {new_course_id}: {e}")
+
+                question_answers_mapping = {}
+
+                if not question_answers_df.empty:
+                    question_answers_filtered = question_answers_df[question_answers_df["question"].isin(question_instance_mapping.keys())].copy()
+                    if not question_answers_filtered.empty:
+                        old_question_answer_ids = question_answers_filtered["id"].tolist()
+                        question_answers_filtered["question"] = question_answers_filtered["question"].map(question_instance_mapping)
+                        question_answers_filtered = question_answers_filtered.drop(columns=["id"])
+                        try:
+                            question_answers_filtered.to_sql(question_answers_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {question_answers_table} WHERE question IN :q_ids ORDER BY id"), {"q_ids": tuple(question_instance_mapping.values())}).fetchall()
+                            new_question_answer_ids = [row[0] for row in result]
+                            question_answers_mapping.update(dict(zip(old_question_answer_ids, new_question_answer_ids)))
+                            logger.info(f"{len(question_answers_filtered)} question answer(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUESTION_ANSWERS for course {new_course_id}: {e}")
+                
+                quiz_slots_mapping = {}
+
+                if not quiz_slots_df.empty:
+                    quiz_slots_filtered = quiz_slots_df[quiz_slots_df["quizid"].isin(quiz_instance_mapping.keys())].copy()
+                    if not quiz_slots_filtered.empty:
+                        old_quiz_slot_ids = quiz_slots_filtered["id"].tolist()
+                        quiz_slots_filtered["quizid"] = quiz_slots_filtered["quizid"].map(quiz_instance_mapping)
+                        quiz_slots_filtered["questionid"] = quiz_slots_filtered["questionid"].map(question_instance_mapping)
+                        quiz_slots_filtered = quiz_slots_filtered.drop(columns=["id", "questionid", "questioncategoryid", "includingsubcategories"])
+                        try:
+                            quiz_slots_filtered.to_sql(quiz_slots_table, conn, if_exists="append", index=False)
+                            result = conn.execute(text(f"SELECT id FROM {quiz_slots_table} WHERE quizid IN :q_ids ORDER BY id"), {"q_ids": tuple(quiz_instance_mapping.values())}).fetchall()
+                            new_quiz_slot_ids = [row[0] for row in result]
+                            quiz_slots_mapping.update(dict(zip(old_quiz_slot_ids, new_quiz_slot_ids)))
+                            logger.info(f"{len(quiz_slots_filtered)} quiz slot(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting QUIZ_SLOTS for course {new_course_id}: {e}")
+
                 forum_instance_mapping = {}
 
                 if not forum_df.empty:
