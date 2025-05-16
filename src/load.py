@@ -295,8 +295,43 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     question_bank_entries_table = f"{new_db.prefix}_question_bank_entries"
     question_versions_table = f"{new_db.prefix}_question_versions"
     question_references_table = f"{new_db.prefix}_question_references"
+    qtype_ddimageortext_table = f"{new_db.prefix}_qtype_ddimageortext"
+    qtype_ddimageortext_drags_table = f"{new_db.prefix}_qtype_ddimageortext_drags"
+    qtype_ddimageortext_drops_table = f"{new_db.prefix}_qtype_ddimageortext_drops"
+    qtype_ddmarker_table = f"{new_db.prefix}_qtype_ddmarker"
+    qtype_ddmarker_drags_table = f"{new_db.prefix}_qtype_ddmarker_drags"
+    qtype_ddmarker_drops_table = f"{new_db.prefix}_qtype_ddmarker_drops"
+    qtype_essay_options_table = f"{new_db.prefix}_qtype_essay_options"
+    qtype_match_options_table = f"{new_db.prefix}_qtype_match_options"
+    qtype_match_subquestions_table = f"{new_db.prefix}_qtype_match_subquestions"
+    qtype_multichoice_options_table = f"{new_db.prefix}_qtype_multichoice_options"
+    qtype_randomsamatch_options_table = f"{new_db.prefix}_qtype_randomsamatch_options"
+    qtype_shortanswer_options_table = f"{new_db.prefix}_qtype_shortanswer_options"
+    question_ddwtos_table = f"{new_db.prefix}_question_ddwtos"
+    question_gapselect_table = f"{new_db.prefix}_question_gapselect"
+    question_truefalse_table = f"{new_db.prefix}_question_truefalse"
     
     module_instance_mapping = {}
+
+    def insert_question_type(qtype_name_as_string, qtype_df, qtype_table, question_mapping, new_course_id, option_column=None):
+        if "questionid" in qtype_df.columns:
+            column_placeholder = "questionid"
+        elif "question" in qtype_df.columns:
+            column_placeholder = "question"
+        else:
+            logger.warning(f"{qtype_name_as_string} skipped: no 'questionid' or 'question' column found.")
+            return
+        qtype_filtered = qtype_df[qtype_df[column_placeholder].isin(question_mapping.keys())].copy()
+        if not qtype_filtered.empty:
+            qtype_filtered[column_placeholder] = qtype_filtered[column_placeholder].map(question_mapping)
+            if option_column != None:
+                qtype_filtered[option_column] = 0
+            qtype_filtered = qtype_filtered.drop(columns=["id"])
+            try:
+                qtype_filtered.to_sql(qtype_table, conn, if_exists="append", index=False)
+                logger.info(f"{len(qtype_filtered)} {qtype_name_as_string}(s) inserted for course {new_course_id}.")
+            except Exception as e:
+                logger.error(f"Error inserting {qtype_name_as_string.upper()} for course {new_course_id}: {e}")
 
     for id in ids:
         course_df = dataframes.get("course", pd.DataFrame())
@@ -335,6 +370,21 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         quiz_slots_df = dataframes.get("quiz_slots", pd.DataFrame())
         courses_context_df = dataframes.get("context_course", pd.DataFrame())
         quiz_sections_df = dataframes.get("quiz_sections", pd.DataFrame())
+        qtype_ddimageortext_df = dataframes.get("qtype_ddimageortext", pd.DataFrame())
+        qtype_ddimageortext_drags_df = dataframes.get("qtype_ddimageortext_drags", pd.DataFrame())
+        qtype_ddimageortext_drops_df = dataframes.get("qtype_ddimageortext_drops", pd.DataFrame())
+        qtype_ddmarker_df = dataframes.get("qtype_ddmarker", pd.DataFrame())
+        qtype_ddmarker_drags_df = dataframes.get("qtype_ddmarker_drags", pd.DataFrame())
+        qtype_ddmarker_drops_df = dataframes.get("qtype_ddmarker_drops", pd.DataFrame())
+        qtype_essay_options_df = dataframes.get("qtype_essay_options", pd.DataFrame())
+        qtype_match_options_df = dataframes.get("qtype_match_options", pd.DataFrame())
+        qtype_match_subquestions_df = dataframes.get("qtype_match_subquestions", pd.DataFrame())
+        qtype_multichoice_options_df = dataframes.get("qtype_multichoice_options", pd.DataFrame())
+        qtype_randomsamatch_options_df = dataframes.get("qtype_randomsamatch_options", pd.DataFrame())
+        qtype_shortanswer_options_df = dataframes.get("qtype_shortanswer_options", pd.DataFrame())
+        question_ddwtos_df = dataframes.get("question_ddwtos", pd.DataFrame())
+        question_gapselect_df = dataframes.get("question_gapselect", pd.DataFrame())
+        question_truefalse_df = dataframes.get("question_truefalse", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -634,7 +684,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     except Exception as e:
                         logger.error(f"Error inserting QUESTION_BANK_ENTRIES for course {new_course_id}: {e}")
 
-                if question_instance_mapping:
                     version_entries = []
                     for new_question_id in question_instance_mapping.values():
                         question_entry_id = question_bank_entry_mapping.get(new_question_id)
@@ -651,6 +700,22 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         logger.info(f"{len(df_versions)} question_versions inserted for course {new_course_id}.")
                     except Exception as e:
                         logger.error(f"Error inserting QUESTION_VERSIONS for course {new_course_id}: {e}")
+                
+                    insert_question_type("qtype_ddimageortext", qtype_ddimageortext_df, qtype_ddimageortext_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_ddimageortext_drags", qtype_ddimageortext_drags_df, qtype_ddimageortext_drags_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_ddimageortext_drops", qtype_ddimageortext_drops_df, qtype_ddimageortext_drops_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_ddmarker", qtype_ddmarker_df, qtype_ddmarker_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_ddmarker_drags", qtype_ddmarker_drags_df, qtype_ddmarker_drags_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_ddmarker_drops", qtype_ddmarker_drops_df, qtype_ddmarker_drops_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_essay_options", qtype_essay_options_df, qtype_essay_options_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_match_options", qtype_match_options_df, qtype_match_options_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_match_subquestions", qtype_match_subquestions_df, qtype_match_subquestions_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_multichoice_options", qtype_multichoice_options_df, qtype_multichoice_options_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_randomsamatch_options", qtype_randomsamatch_options_df, qtype_randomsamatch_options_table, question_instance_mapping, new_course_id)
+                    insert_question_type("qtype_shortanswer_options", qtype_shortanswer_options_df, qtype_shortanswer_options_table, question_instance_mapping, new_course_id)
+                    insert_question_type("question_ddwtos", question_ddwtos_df, question_ddwtos_table, question_instance_mapping, new_course_id)
+                    insert_question_type("question_gapselect", question_gapselect_df, question_gapselect_table, question_instance_mapping, new_course_id)
+                    insert_question_type("question_truefalse", question_truefalse_df, question_truefalse_table, question_instance_mapping, new_course_id, "showstandardinstruction")
 
                 question_answers_mapping = {}
 
