@@ -53,7 +53,7 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
         logger.warning("course_sections or course_modules is empty. Skipping transform_sections.")
         return dataframes
 
-    to_remove_sections = sections_df[sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment"])].copy()
+    to_remove_sections = sections_df[sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment", "Avaliação das Atividades Práticas", "Avaliação das Atividades Prática", "Practical Activities Assessment", "Evaluation of Practical Activities"])].copy()
 
     if to_remove_sections.empty:
         logger.info("No sections found for removal.")
@@ -68,7 +68,7 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
 
     logger.info(f"Identified {len(module_ids_to_remove)} module(s) to remove based on removed sections.")
 
-    dataframes["course_sections"] = sections_df[~sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment"])].copy()
+    dataframes["course_sections"] = sections_df[~sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment", "Avaliação das Atividades Práticas", "Avaliação das Atividades Prática", "Practical Activities Assessment", "Evaluation of Practical Activities"])].copy()
     dataframes["course_modules"] = modules_df[~modules_df["id"].isin(module_ids_to_remove)].copy()
 
     if not cfo_df.empty:
@@ -115,12 +115,12 @@ def transform_sequence(sequence_str, map, hvp_ids=None):
 
 
 def transform_quiz(df: pd.DataFrame) -> pd.DataFrame:
-    logger.debug(f"Removing 'Avaliação Inicial' or 'Initial Assessment' from QUIZ table...")
+    logger.debug(f"Removing unwanted quizzes from QUIZ table...")
     df = df.copy()
     before = len(df)
-    df = df[~df["name"].isin(["Avaliação Inicial", "Initial Assessment"])]
+    df = df[~df["name"].isin(["Avaliação Inicial", "Initial Assessment", "Avaliação das Atividades Práticas", "Avaliação das Atividades Prática", "Practical Activities Assessment", "Evaluation of Practical Activities"])]
     after = len(df)
-    logger.info(f"Removed {before - after} quiz entries named 'Avaliação Inicial' or 'Initial Assessment'.")
+    logger.info(f"Removed {before - after} unwanted quiz entries.")
     return df
 
 
