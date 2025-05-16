@@ -138,10 +138,6 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
             dataframes[table] = df
         except Exception as e:
             logger.error(f"Error extracting {table.upper()} from NEW DB: {e}.")
-            try:
-                new_conn.rollback()
-            except:
-                pass
             
     logger.info(f"-------------------- End of extraction process. --------------------")
     return dataframes
