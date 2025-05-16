@@ -605,6 +605,10 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     quiz_filtered = quiz_df[quiz_df["course"] == id].copy()
                     if not quiz_filtered.empty:
                         old_quiz_ids = quiz_filtered["id"].tolist()
+                        if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                            quiz_filtered["name"] = "Final Assessment"
+                        else:
+                            quiz_filtered["name"] = "Avaliação Final"
                         quiz_filtered["course"] = new_course_id
                         quiz_filtered = quiz_filtered.drop(columns=["id", "completionpass"])
                         try:
@@ -1130,6 +1134,16 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_sections_df["name"].str.strip().str.lower().isin(["avaliações finais", "certificado", "final assessments", "certificate"]),
                         "availability"
                     ] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[false]}'
+                    course_sections_df["name"] = course_sections_df["name"].replace({
+                        "Avaliações Finais": "Avaliação",
+                        "Final Assessments": "Assessment",
+                        "Avaliação das Atividades Práticas": "Avaliação",
+                        "Avaliação das Atividades Prática": "Avaliação",
+                        "Avaliação das Atividades Teórica": "Avaliação",
+                        "Practical Activities Assessment": "Assessment",
+                        "Theoretical Activities Assessment": "Assessment",
+                        "Evaluation of Practical Activities": "Assessment"
+                    })
 
                     course_sections_df["sequence"] = course_sections_df["sequence"].apply(
                         lambda seq: transform_sequence(seq, module_instance_mapping, hvp_module_ids)
@@ -1241,7 +1255,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 355, 332], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
