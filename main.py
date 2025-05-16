@@ -56,17 +56,15 @@ def main():
         # - old_engine.connect(): read-only, better for performance (no locking/transactions)
         # - new_engine.begin(): transactional, used for write operations (auto commit/rollback)
         
-        with old_engine.connect() as old_conn, new_engine.begin() as new_conn:
+        with old_engine.connect() as old_conn, new_engine.connect() as new_conn:
             dataframes = extract(old_conn, new_conn, old_db.prefix, new_db.prefix)
             dataframes = transform(dataframes)
-            load(dataframes, new_conn, new_db)
+        with new_engine.begin() as trans_conn:
+            load(dataframes, trans_conn, new_db)
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
     finally:
-        # dispose all connections after the process ends
-        old_engine.dispose()
-        new_engine.dispose()
         logger.debug("Disposed all database connections after ETL run.")
 
 if __name__ == "__main__":
