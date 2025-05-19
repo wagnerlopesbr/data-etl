@@ -27,6 +27,26 @@ def if_table_choice(table: str, df: pd.DataFrame):
         logger.info(f"There {'is' if len(not_matching) == 1 else 'are'} {len(not_matching)} row{'s' if len(not_matching) != 1 else ''} not matching.")
 """
 
+def create_feedback_instance_df(new_course_id, course_shortname):
+    df = pd.DataFrame([{
+        "course": new_course_id,
+        "name": f"Feedback {course_shortname}",
+        "introformat": 1,
+        "anonymous": 2,
+        "email_notification": 0,
+        "autonumbering": 0,
+        "page_after_submitformat": 1,
+        "timemodified": timestamp,
+        "completionsubmit": 1
+    }])
+    return df
+
+def create_feedback_items_df(feedback_id, items_df):
+    items_df["feedback"] = feedback_id
+    items_df["template"] = items_df["template"].iloc[0]
+    items_df = items_df.drop(columns=["id"])
+    return items_df
+
 def create_course_customfield_data_df(new_course_id, new_course_context_id, customfield_data_df, image_text=None):
     fieldid_mapping_old_to_new = {
         8: 7,
@@ -310,6 +330,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     question_ddwtos_table = f"{new_db.prefix}_question_ddwtos"
     question_gapselect_table = f"{new_db.prefix}_question_gapselect"
     question_truefalse_table = f"{new_db.prefix}_question_truefalse"
+    feedback_table = f"{new_db.prefix}_feedback"
+    feedback_item_table = f"{new_db.prefix}_feedback_item"
     
     module_instance_mapping = {}
 
@@ -355,6 +377,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         reengagement_df = dataframes.get("reengagement", pd.DataFrame())
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
+        feedback_item_ptbr_df = dataframes.get("feedback_item_ptbr", pd.DataFrame())
+        feedback_item_en_df = dataframes.get("feedback_item_en", pd.DataFrame())
         #hvp_df = dataframes.get("hvp", pd.DataFrame())
         cc_templates_br_df = dataframes.get("customcert_templates_ptbr", pd.DataFrame())
         cc_pages_br_df = dataframes.get("customcert_pages_ptbr", pd.DataFrame())
@@ -579,6 +603,29 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting ENROL for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No ENROL entries found for course {id}.")
+
+                new_feedback_id = None
+                
+                if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                    if not feedback_item_en_df.empty:
+                        fb_item_df = feedback_item_en_df.copy()
+                        fb_df = create_feedback_instance_df(new_course_id, course_shortname)
+                        fb_df.to_sql(feedback_table, conn, if_exists="append", index=False)
+                        result = conn.execute(text(f"SELECT id FROM {feedback_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                        feedback_item_df = create_feedback_items_df(result, fb_item_df)
+                        feedback_item_df.to_sql(feedback_item_table, conn, if_exists="append", index=False)
+                        new_feedback_id = result
+                else:
+                    if not feedback_item_ptbr_df.empty:
+                        fb_item_df = feedback_item_ptbr_df.copy()
+                        fb_df = create_feedback_instance_df(new_course_id, course_shortname)
+                        fb_df.to_sql(feedback_table, conn, if_exists="append", index=False)
+                        result = conn.execute(text(f"SELECT id FROM {feedback_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                        feedback_item_df = create_feedback_items_df(result, fb_item_df)
+                        feedback_item_df.to_sql(feedback_item_table, conn, if_exists="append", index=False)
+                        new_feedback_id = result
+                    logger.info(f"{len(feedback_item_df)} feedback item(s) inserted for course {new_course_id}.")
+
                 
                 resource_instance_mapping = {}
 
@@ -908,6 +955,11 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == enrol_module_id, "instance"
                     ].map(lambda inst: enrol_instance_mapping.get(inst, inst))
 
+                    # changing the feedback instances ids
+                    feedback_module_id = new_modules_map.get("feedback")
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == feedback_module_id, "instance"
+                    ] = new_feedback_id
 
                     """
                     # changing the hvps instances ids
@@ -1255,7 +1307,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)
 
                 """
                 if table == "choice":
