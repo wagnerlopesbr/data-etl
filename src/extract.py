@@ -19,7 +19,6 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "course_modules": f"SELECT * FROM {old_db_prefix}_course_modules",
         "modules": f"SELECT * FROM {old_db_prefix}_modules",
         "page": f"SELECT * FROM {old_db_prefix}_page",
-        "feedback": f"SELECT * FROM {old_db_prefix}_feedback",
         "choice": f"SELECT * FROM {old_db_prefix}_choice ORDER BY id ASC",
         "choice_options": f"SELECT * FROM {old_db_prefix}_choice_options ORDER BY choiceid ASC",
         "quiz": f"SELECT * FROM {old_db_prefix}_quiz",
@@ -98,7 +97,9 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "customcert_templates_en": f"SELECT * FROM {new_db_prefix}_customcert_templates WHERE id = 15 LIMIT 1",
         "customcert_pages_en": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY id, sequence ASC",
         "customcert_elements_en": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY pageid, sequence ASC",
-        "customfield_field_new": f"SELECT * FROM {new_db_prefix}_customfield_field WHERE categoryid = 7 ORDER BY id ASC"
+        "customfield_field_new": f"SELECT * FROM {new_db_prefix}_customfield_field WHERE categoryid = 7 ORDER BY id ASC",
+        "feedback_item_ptbr": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 2",
+        "feedback_item_en": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 3"
     }
 
     specific_joins = ["page", "feedback", "quiz", "url", "forum", "reengagement"]
