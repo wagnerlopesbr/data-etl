@@ -98,8 +98,8 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "customcert_pages_en": f"SELECT * FROM {new_db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY id, sequence ASC",
         "customcert_elements_en": f"SELECT * FROM {new_db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY pageid, sequence ASC",
         "customfield_field_new": f"SELECT * FROM {new_db_prefix}_customfield_field WHERE categoryid = 7 ORDER BY id ASC",
-        "feedback_item_ptbr": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 2",
-        "feedback_item_en": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 3"
+        "feedback_item_ptbr": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 2 AND feedback = 0",
+        "feedback_item_en": f"SELECT * FROM {new_db_prefix}_feedback_item WHERE template = 4 AND feedback = 0"
     }
 
     specific_joins = ["page", "feedback", "quiz", "url", "forum", "reengagement"]
