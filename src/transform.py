@@ -5,7 +5,6 @@ import pandas as pd
 from sqlalchemy import text
 from src.logging import start
 
-
 logger = start()
 
 
@@ -33,18 +32,9 @@ def transform_page(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"PAGE table content transformed successfully.")
     return df
 
-"""
-def transform_choice(df: pd.DataFrame) -> pd.DataFrame:
-    logger.debug(f"Transforming content of the CHOICE table...")
-    df = df.copy()
-    df["match_name_filtering"] = df["name"].isin(["Política de Assinatura", "Signature Policy"])
-    logger.info(f"CHOICE table content transformed successfully.")
-    return df
-"""
 
 def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     logger.debug("Filtering out specific sections to remove from course_sections...")
-
     sections_df = dataframes.get("course_sections", pd.DataFrame())
     modules_df = dataframes.get("course_modules", pd.DataFrame())
     cfo_df = dataframes.get("course_format_options", pd.DataFrame())
@@ -54,18 +44,15 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
         return dataframes
 
     to_remove_sections = sections_df[sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment", "Avaliação das Atividades Práticas", "Avaliação das Atividades Prática", "Practical Activities Assessment", "Evaluation of Practical Activities"])].copy()
-
     if to_remove_sections.empty:
         logger.info("No sections found for removal.")
         return dataframes
-
     logger.info(f"Found {len(to_remove_sections)} sections to remove.")
 
     module_ids_to_remove = set()
     for sequence in to_remove_sections["sequence"].dropna():
         module_ids = str(sequence).split(",")
         module_ids_to_remove.update(int(mid) for mid in module_ids if mid.isdigit())
-
     logger.info(f"Identified {len(module_ids_to_remove)} module(s) to remove based on removed sections.")
 
     dataframes["course_sections"] = sections_df[~sections_df["name"].isin(["Avaliação Inicial", "Initial Assessment", "Avaliação das Atividades Práticas", "Avaliação das Atividades Prática", "Practical Activities Assessment", "Evaluation of Practical Activities"])].copy()
@@ -77,16 +64,7 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
         dataframes["course_format_options"] = cfo_df[~cfo_df["sectionid"].isin(section_ids_to_remove)].copy()
         after_count = len(dataframes["course_format_options"])
         logger.info(f"Removed {before_count - after_count} course_format_options related to removed sections.")
-
     logger.info("Sections and related course_modules removed successfully.")
-
-    #rename_map = {
-    #    "avaliações finais": "avaliação",
-    #    "final assessments": "assessment"
-    #}
-    
-    #dataframes["course_sections"]["name"] = dataframes["course_sections"]["name"].replace(rename_map)
-    #logger.info("Renamed specific section names: 'avaliações finais' -> 'avaliação', 'final assessments' -> 'assessment'.")
 
     return dataframes
 
@@ -97,7 +75,6 @@ def transform_sequence(sequence_str, map, hvp_ids=None):
     
     old_ids = sequence_str.split(",")
     new_ids = []
-
     for old_id in old_ids:
         old_id = old_id.strip()
         if not old_id:
@@ -110,7 +87,6 @@ def transform_sequence(sequence_str, map, hvp_ids=None):
 
         new_id = map.get(int_old_id, old_id)
         new_ids.append(str(new_id))
-
     return ",".join(new_ids)
 
 
@@ -139,7 +115,6 @@ def transform(dataframes):
     if not has_relevant_dataframe:
         logger.info("No relevant dataframes to transform.")
         return dataframes
-
     logger.debug("Starting the transforming process...")
 
     if "page" in dataframes:
@@ -147,15 +122,7 @@ def transform(dataframes):
             dataframes["page"] = transform_page(dataframes["page"])
         except Exception as e:
             logger.error(f"Error transforming PAGE: {e}.")
-    
-    """
-    if "choice" in dataframes:
-        try:
-            dataframes["choice"] = transform_choice(dataframes["choice"])
-        except Exception as e:
-            logger.error(f"Error transforming CHOICE: {e}.")
-    """
-    
+        
     dataframes = transform_sections(dataframes)
 
     if "quiz" in dataframes:
@@ -171,4 +138,5 @@ def transform(dataframes):
             logger.error(f"Error transforming REENGAGEMENT: {e}")
 
     logger.info("End of transforming process.")
+
     return dataframes

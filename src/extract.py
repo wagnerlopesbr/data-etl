@@ -46,6 +46,7 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "enrol": f"SELECT * FROM {old_db_prefix}_enrol ORDER BY courseid ASC",
         "forum": f"SELECT * FROM {old_db_prefix}_forum",
         "label": f"SELECT * FROM {old_db_prefix}_label",
+        "folder": f"SELECT * FROM {old_db_prefix}_folder",
         "resource": f"SELECT * FROM {old_db_prefix}_resource",
         "reengagement": f"SELECT * FROM {old_db_prefix}_reengagement",
         "customcert_image_hash_info": f"""
@@ -70,7 +71,6 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
                                             AND JSON_UNQUOTE(JSON_EXTRACT(e.data, '$.filename')) = f.filename
                                             ORDER BY c.fullname ASC
                                     """,
-        #"hvp": f"SELECT * FROM {old_db_prefix}_hvp ORDER BY id ASC",
         "course_format_options": f"SELECT * FROM {old_db_prefix}_course_format_options ORDER BY sectionid ASC",
         "course_modules_sections": f"""
                                        SELECT
