@@ -22,6 +22,6 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- change some sections and elements names during migration to better fit the new platform
-- change some styling parameters of some elements of 'customcert_template' to a better looking at 'customcert' pdf instances 
+- upgrade ftp downloader logic to store 'mod_resource' files
+- transform 'mod_resource' elements into 'mod_page' as placeholder to future update
 - course_df.to_list() to use as parameter in 'if_table_course' function
