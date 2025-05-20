@@ -16,6 +16,38 @@ logger = start()
 timestamp = int(datetime.now().timestamp())
 
 
+def insert_and_mapping(conn, loop_id, new_course_id, instance_name, mapping, df, table,
+                       param_1=None, param_2=None, param_3=None, param_4=None, param_5=None, param_6=None, param_7=None, param_8=None, param_9=None, param_10=None):
+    if not df.empty:
+        df_filtered = df[df[param_3] == param_1].copy()
+        if not df_filtered.empty:
+            old_ids_list = df_filtered["id"].tolist()
+            df_filtered[param_3] = param_2
+            df_filtered = df_filtered.drop(columns=["id"])
+            if param_10 in df_filtered.columns:
+                df_filtered = df_filtered.drop(columns=[param_10])
+            try:
+                df_filtered.to_sql(table, conn, if_exists="append", index=False)
+                result = conn.execute(text(f"SELECT id FROM {table} WHERE {param_3} = :param ORDER BY id"), {"param": param_2}).fetchall()
+                new_ids_list = [row[0] for row in result]
+                mapping.update(dict(zip(old_ids_list, new_ids_list)))
+                if param_9 is not None and not param_9.empty:
+                    df_filtered_2 = param_9[param_9[param_8].isin(old_ids_list)].copy()
+                    if not df_filtered_2.empty:
+                        df_filtered_2 = df_filtered_2.drop(columns=["id"])
+                        try:
+                            df_filtered_2[param_8] = df_filtered_2[param_8].map(mapping)
+                            df_filtered_2.to_sql(param_7, conn, if_exists="append", index=False)
+                            logger.info(f"{len(df_filtered_2)} {param_6}(s) inserted for course {new_course_id}.")
+                        except Exception as e:
+                            logger.error(f"Error inserting {param_6.upper()} for course {new_course_id}: {e}")
+                logger.info(f"{len(df_filtered)} {instance_name}(s) inserted for course {new_course_id}.")
+            except Exception as e:
+                logger.error(f"Error inserting {instance_name.upper()} for course {new_course_id}: {e}")
+        else:
+            logger.warning(f"No {instance_name.upper()} entries found for course {loop_id}.")
+
+
 def create_feedback_instance_df(new_course_id, course_shortname):
     english = course_shortname.upper().startswith("EN") or course_shortname.upper().endswith("EN")
     df = pd.DataFrame([{
@@ -291,7 +323,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     question_truefalse_table = f"{new_db.prefix}_question_truefalse"
     feedback_table = f"{new_db.prefix}_feedback"
     feedback_item_table = f"{new_db.prefix}_feedback_item"
-    folder_table = f"{new_db.prefix}_folder"
+    #folder_table = f"{new_db.prefix}_folder"
     
     module_instance_mapping = {}
 
@@ -368,7 +400,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         question_ddwtos_df = dataframes.get("question_ddwtos", pd.DataFrame())
         question_gapselect_df = dataframes.get("question_gapselect", pd.DataFrame())
         question_truefalse_df = dataframes.get("question_truefalse", pd.DataFrame())
-        folder_df = dataframes.get("folder", pd.DataFrame())
+        #folder_df = dataframes.get("folder", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -423,111 +455,31 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
                 # QUESTION CATEGORY
                 question_category_mapping = {}
-                if not question_categories_df.empty:
-                    question_categories_filtered = question_categories_df[question_categories_df["contextid"] == course_old_context_id].copy()
-                    if not question_categories_filtered.empty:
-                        old_question_category_ids = question_categories_filtered["id"].tolist()
-                        question_categories_filtered["contextid"] = new_course_context_id
-                        question_categories_filtered = question_categories_filtered.drop(columns=["id"])
-                        try:
-                            question_categories_filtered.to_sql(question_categories_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {question_categories_table} WHERE contextid = :new_course_context_id ORDER BY id"), {"new_course_context_id": new_course_context_id}).fetchall()
-                            new_question_category_ids = [row[0] for row in result]
-                            question_category_mapping.update(dict(zip(old_question_category_ids, new_question_category_ids)))
-                            logger.info(f"{len(question_categories_filtered)} question category(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting QUESTION_CATEGORY for course {new_course_id}: {e}")
-                        else:
-                            logger.warning(f"No QUESTION_CATEGORY entries found for course {id}.")
+                insert_and_mapping(conn, id, new_course_id, "question_category", question_category_mapping, question_categories_df, question_categories_table,
+                                   param_1=course_old_context_id, param_2=new_course_context_id, param_3="contextid")
 
                 # CHOICE            
                 choice_instance_mapping = {}
-                if not choice_df.empty:
-                    choice_filtered = choice_df[choice_df["course"] == id].copy()
-                    if not choice_filtered.empty:
-                        old_choice_ids = choice_filtered["id"].tolist()
-                        choice_filtered["course"] = new_course_id
-                        choice_filtered = choice_filtered.drop(columns=["id"])
-                        try:
-                            choice_filtered.to_sql(choice_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {choice_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_choice_ids = [row[0] for row in result]
-                            choice_instance_mapping.update(dict(zip(old_choice_ids, new_choice_ids)))
-                            if not choice_options_df.empty:
-                                choice_options_filtered = choice_options_df[choice_options_df["choiceid"].isin(old_choice_ids)].copy()
-                                if not choice_options_filtered.empty:
-                                    choice_options_filtered = choice_options_filtered.drop(columns=["id"])
-                                    try:
-                                        choice_options_filtered["choiceid"] = choice_options_filtered["choiceid"].map(choice_instance_mapping)
-                                        choice_options_filtered.to_sql(choice_options_table, conn, if_exists="append", index=False)
-                                        logger.info(f"{len(choice_options_filtered)} choice_option(s) inserted for course {new_course_id}.")
-                                    except Exception as e:
-                                        logger.error(f"Error inserting CHOICE_OPTIONS for course {new_course_id}: {e}")
-                            logger.info(f"{len(choice_filtered)} choice(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting CHOICE for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No CHOICE entries found for course {id}.")
-
+                insert_and_mapping(conn, id, new_course_id, "choice", choice_instance_mapping, choice_df, choice_table,
+                                   param_1=id, param_2=new_course_id, param_3="course",
+                                   param_6="choice_options", param_7=choice_options_table, param_8="choiceid", param_9=choice_options_df)
+        
                 # PAGE
                 page_instance_mapping = {}
-                if not page_df.empty:
-                    page_filtered = page_df[page_df["course"] == id].copy()
-                    if not page_filtered.empty:
-                        old_page_ids = page_filtered["id"].tolist()
-                        page_filtered["course"] = new_course_id
-                        page_filtered = page_filtered.drop(columns=["id"])
-                        if "content_link" in page_filtered.columns:
-                            page_filtered = page_filtered.drop(columns=["content_link"])
-                        try:
-                            page_filtered.to_sql(page_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_page_ids = [row[0] for row in result]
-                            page_instance_mapping.update(dict(zip(old_page_ids, new_page_ids)))
-                            logger.info(f"{len(page_filtered)} page(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting PAGE for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No PAGE entries found for course {id}.")
-                
+                insert_and_mapping(conn, id, new_course_id, "page", page_instance_mapping, page_df, page_table,
+                                   param_1=id, param_2=new_course_id, param_3="course", param_10="content_link")
+                                
                 # LABEL
                 label_instance_mapping = {}
-                if not label_df.empty:
-                    label_filtered = label_df[label_df["course"] == id].copy()
-                    if not label_filtered.empty:
-                        old_label_ids = label_filtered["id"].tolist()
-                        label_filtered["course"] = new_course_id
-                        label_filtered = label_filtered.drop(columns=["id"])
-                        try:
-                            label_filtered.to_sql(label_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {label_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_label_ids = [row[0] for row in result]
-                            label_instance_mapping.update(dict(zip(old_label_ids, new_label_ids)))
-                            logger.info(f"{len(label_filtered)} label(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting LABEL for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No LABEL entries found for course {id}.")
+                insert_and_mapping(conn, id, new_course_id, "label", label_instance_mapping, label_df, label_table,
+                                   param_1=id, param_2=new_course_id, param_3="course")
                 
                 # URL
                 url_instance_mapping = {}
-                if not url_df.empty:
-                    url_filtered = url_df[url_df["course"] == id].copy()
-                    if not url_filtered.empty:
-                        old_url_ids = url_filtered["id"].tolist()
-                        url_filtered["course"] = new_course_id
-                        url_filtered = url_filtered.drop(columns=["id"])
-                        try:
-                            url_filtered.to_sql(url_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {url_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_url_ids = [row[0] for row in result]
-                            url_instance_mapping.update(dict(zip(old_url_ids, new_url_ids)))
-                            logger.info(f"{len(url_filtered)} url(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting URL for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No URL entries found for course {id}.")
-
+                insert_and_mapping(conn, id, new_course_id, "url", url_instance_mapping, url_df, url_table,
+                                   param_1=id, param_2=new_course_id, param_3="course")
+                
+                """
                 # FOLDER
                 folder_instance_mapping = {}
                 if not folder_df.empty:
@@ -546,26 +498,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             logger.error(f"Error inserting FOLDER for course {new_course_id}: {e}")
                     else:
                         logger.warning(f"No FOLDER entries found for course {id}.")
+                """
 
                 # ENROL
                 enrol_instance_mapping = {}
-                if not enrol_df.empty:
-                    enrol_filtered = enrol_df[enrol_df["courseid"] == id].copy()
-                    if not enrol_filtered.empty:
-                        old_enrol_ids = enrol_filtered["id"].tolist()
-                        enrol_filtered["courseid"] = new_course_id
-                        enrol_filtered = enrol_filtered.drop(columns=["id"])
-                        try:
-                            enrol_filtered.to_sql(enrol_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {enrol_table} WHERE courseid = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_enrol_ids = [row[0] for row in result]
-                            enrol_instance_mapping.update(dict(zip(old_enrol_ids, new_enrol_ids)))
-                            logger.info(f"{len(enrol_filtered)} enrol(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting ENROL for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No ENROL entries found for course {id}.")
-
+                insert_and_mapping(conn, id, new_course_id, "enrol", enrol_instance_mapping, enrol_df, enrol_table,
+                                   param_1=id, param_2=new_course_id, param_3="courseid")
+                
                 # FEEDBACK
                 new_feedback_id = None
                 if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
@@ -590,22 +529,8 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
                 # RESOURCE
                 resource_instance_mapping = {}
-                if not resource_df.empty:
-                    resource_filtered = resource_df[resource_df["course"] == id].copy()
-                    if not resource_filtered.empty:
-                        old_resource_ids = resource_filtered["id"].tolist()
-                        resource_filtered["course"] = new_course_id
-                        resource_filtered = resource_filtered.drop(columns=["id"])
-                        try:
-                            resource_filtered.to_sql(resource_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {resource_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_resource_ids = [row[0] for row in result]
-                            resource_instance_mapping.update(dict(zip(old_resource_ids, new_resource_ids)))
-                            logger.info(f"{len(resource_filtered)} resource(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting RESOURCE for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No RESOURCE entries found for course {id}.")
+                insert_and_mapping(conn, id, new_course_id, "resource", resource_instance_mapping, resource_df, resource_table,
+                                   param_1=id, param_2=new_course_id, param_3="course")
                 
                 # QUIZ
                 quiz_instance_mapping = {}
@@ -749,41 +674,13 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
                 # FORUM
                 forum_instance_mapping = {}
-                if not forum_df.empty:
-                    forum_filtered = forum_df[forum_df["course"] == id].copy()
-                    if not forum_filtered.empty:
-                        old_forum_ids = forum_filtered["id"].tolist()
-                        forum_filtered["course"] = new_course_id
-                        forum_filtered = forum_filtered.drop(columns=["id"])
-                        try:
-                            forum_filtered.to_sql(forum_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {forum_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_forum_ids = [row[0] for row in result]
-                            forum_instance_mapping.update(dict(zip(old_forum_ids, new_forum_ids)))
-                            logger.info(f"{len(forum_filtered)} forum(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting FORUM for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No FORUM entries found for course {id}.")
+                insert_and_mapping(conn, id, new_course_id, "forum", forum_instance_mapping, forum_df, forum_table,
+                                   param_1=id, param_2=new_course_id, param_3="course")
                 
                 # REENGAGEMENT
                 reengagement_instance_mapping = {}
-                if not reengagement_df.empty:
-                    reengagement_filtered = reengagement_df[reengagement_df["course"] == id].copy()
-                    if not reengagement_filtered.empty:
-                        old_reengagement_ids = reengagement_filtered["id"].tolist()
-                        reengagement_filtered["course"] = new_course_id
-                        reengagement_filtered = reengagement_filtered.drop(columns=["id"])
-                        try:
-                            reengagement_filtered.to_sql(reengagement_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {reengagement_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_reengagement_ids = [row[0] for row in result]
-                            reengagement_instance_mapping.update(dict(zip(old_reengagement_ids, new_reengagement_ids)))
-                            logger.info(f"{len(reengagement_filtered)} reengagement(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting REENGAGEMENT for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No REENGAGEMENT entries found for course {id}.")
+                insert_and_mapping(conn, id, new_course_id, "reengagement", reengagement_instance_mapping, reengagement_df, reengagement_table,
+                                   param_1=id, param_2=new_course_id, param_3="course")
                 
                 # CUSTOMCERT
                 customcert_df = create_customcert_instance_df(new_course_id, course_shortname)
@@ -831,6 +728,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == url_module_id, "instance"
                     ].map(lambda inst: url_instance_mapping.get(inst, inst))
 
+                    """
                     # changing the folder instances ids
                     folder_module_id = new_modules_map.get("folder")
                     course_modules_filtered_df.loc[
@@ -838,6 +736,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     ] = course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == folder_module_id, "instance"
                     ].map(lambda inst: folder_instance_mapping.get(inst, inst))
+                    """
 
                     # changing the resource instances ids
                     resource_module_id = new_modules_map.get("resource")
