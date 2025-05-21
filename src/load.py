@@ -310,7 +310,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     label_table = f"{new_db.prefix}_label"
     url_table = f"{new_db.prefix}_url"
     enrol_table = f"{new_db.prefix}_enrol"
-    resource_table = f"{new_db.prefix}_resource"
     quiz_table = f"{new_db.prefix}_quiz"
     forum_table = f"{new_db.prefix}_forum"
     reengagement_table = f"{new_db.prefix}_reengagement"
@@ -346,7 +345,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
     question_truefalse_table = f"{new_db.prefix}_question_truefalse"
     feedback_table = f"{new_db.prefix}_feedback"
     feedback_item_table = f"{new_db.prefix}_feedback_item"
-    #folder_table = f"{new_db.prefix}_folder"
     
     module_instance_mapping = {}
 
@@ -423,7 +421,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         question_ddwtos_df = dataframes.get("question_ddwtos", pd.DataFrame())
         question_gapselect_df = dataframes.get("question_gapselect", pd.DataFrame())
         question_truefalse_df = dataframes.get("question_truefalse", pd.DataFrame())
-        #folder_df = dataframes.get("folder", pd.DataFrame())
 
         course = course_df[course_df["id"] == id]
         if course.empty:
@@ -502,26 +499,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 insert_and_mapping(conn, id, new_course_id, "url", url_instance_mapping, url_df, url_table,
                                    param_1=id, param_2=new_course_id, param_3="course")
                 
-                """
-                # FOLDER
-                folder_instance_mapping = {}
-                if not folder_df.empty:
-                    folder_filtered = folder_df[folder_df["course"] == id].copy()
-                    if not folder_filtered.empty:
-                        old_folder_ids = folder_filtered["id"].tolist()
-                        folder_filtered["course"] = new_course_id
-                        folder_filtered = folder_filtered.drop(columns=["id"])
-                        try:
-                            folder_filtered.to_sql(folder_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {folder_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_folder_ids = [row[0] for row in result]
-                            folder_instance_mapping.update(dict(zip(old_folder_ids, new_folder_ids)))
-                            logger.info(f"{len(folder_filtered)} folder(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting FOLDER for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No FOLDER entries found for course {id}.")
-                """
 
                 # ENROL
                 enrol_instance_mapping = {}
@@ -563,12 +540,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                             result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                             resource_to_page_instance_mapping[old_id] = result
                         logger.info(f"{len(resource_filtered)} NEW PAGE element(s) to represent OLD RESOURCE(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
-
-                """
-                resource_instance_mapping = {}
-                insert_and_mapping(conn, id, new_course_id, "resource", resource_instance_mapping, resource_df, resource_table,
-                                   param_1=id, param_2=new_course_id, param_3="course")
-                """
                 
                 # QUIZ
                 quiz_instance_mapping = {}
@@ -758,16 +729,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == url_module_id, "instance"
                     ].map(lambda inst: url_instance_mapping.get(inst, inst))
 
-                    """
-                    # changing the folder instances ids
-                    folder_module_id = new_modules_map.get("folder")
-                    course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == folder_module_id, "instance"
-                    ] = course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == folder_module_id, "instance"
-                    ].map(lambda inst: folder_instance_mapping.get(inst, inst))
-                    """
-
+                    # changing the page (and old resources) instances ids
                     all_page_instance_mapping = {**page_instance_mapping, **resource_to_page_instance_mapping}
 
                     page_module_id = new_modules_map.get("page")
@@ -781,29 +743,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                     course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == resource_module_id, "module"
                     ] = page_module_id
-
-                    """
-                    # changing the page instances ids
-                    page_module_id = new_modules_map.get("page")
-                    course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == page_module_id, "instance"
-                    ] = course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == page_module_id, "instance"
-                    ].map(lambda inst: page_instance_mapping.get(inst, inst))
-
-                    # changing the resource instances ids
-                    resource_module_id = new_modules_map.get("resource")
-                    course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == resource_module_id, "instance"
-                    ] = course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == resource_module_id, "instance"
-                    ].map(lambda inst: resource_to_page_instance_mapping.get(inst, inst))
-
-                    # changing the resources into pages instances ids
-                    course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == resource_module_id, "module"
-                    ] = page_module_id
-                    """
 
                     # changing the forum instances ids
                     forum_module_id = new_modules_map.get("forum")

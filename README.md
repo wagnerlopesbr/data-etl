@@ -22,6 +22,5 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- upgrade ftp downloader logic to store 'mod_resource' files
-- transform 'mod_resource' elements into 'mod_page' as placeholder to future update
+- upgrade ftp downloader logic to store 'mod_resource' physical files
 - course_df.to_list() to use as parameter in 'if_table_course' function
