@@ -12,7 +12,7 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "context_course": f"SELECT * FROM {old_db_prefix}_context WHERE contextlevel = 50",
         "context_category": f"SELECT * FROM {old_db_prefix}_context WHERE contextlevel = 40",
         "course_categories": f"SELECT * FROM {old_db_prefix}_course_categories",
-        "course": f"SELECT * FROM {old_db_prefix}_course WHERE format <> 'site' AND category = 2",
+        "course": f"SELECT * FROM {old_db_prefix}_course WHERE format <> 'site'",
         "customfield_field_old": f"SELECT * FROM {old_db_prefix}_customfield_field WHERE categoryid = 2 ORDER BY FIELD(id, 8, 1, 2, 3, 4, 5, 6, 7)",
         "customfield_data": f"SELECT * FROM {old_db_prefix}_customfield_data ORDER BY FIELD(fieldid, 8, 1, 2, 3, 4, 5, 6, 7)",
         "course_sections": f"SELECT * FROM {old_db_prefix}_course_sections ORDER BY section ASC",
@@ -69,6 +69,22 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
                                             INNER JOIN {old_db_prefix}_files f ON f.component = 'mod_customcert' AND f.filearea = 'image' and f.mimetype like '%%image%%' and f.contextid = cctx.id
                                             where e.name = 'conteúdo programático'
                                             AND JSON_UNQUOTE(JSON_EXTRACT(e.data, '$.filename')) = f.filename
+                                            ORDER BY c.fullname ASC
+                                    """,
+        "resource_content_hash_info": f"""
+                                            SELECT ctx.id AS resource_context_id,
+                                                f.contenthash,
+                                                f.filename,
+                                                r.id as resource_id,
+                                                r.name as resource_name,
+                                                c.fullname as course,
+                                                c.id as course_id
+                                            FROM {old_db_prefix}_resource r
+                                            INNER JOIN {old_db_prefix}_course_modules cm ON cm.instance = r.id AND cm.module = 18
+                                            INNER JOIN {old_db_prefix}_context ctx ON ctx.instanceid = cm.id
+                                            INNER JOIN {old_db_prefix}_course c ON c.id = r.course
+                                            INNER JOIN {old_db_prefix}_files f ON f.component = 'mod_resource' AND f.contextid = ctx.id
+                                            WHERE f.filename <> '.'
                                             ORDER BY c.fullname ASC
                                     """,
         "course_format_options": f"SELECT * FROM {old_db_prefix}_course_format_options ORDER BY sectionid ASC",
