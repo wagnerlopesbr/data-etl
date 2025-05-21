@@ -20,7 +20,3 @@ source .venv/bin/activate
 ```bash
 source .venv/bin/activate
 ```
-
-### reminder (to Wagner; to be deleted)
-- upgrade ftp downloader logic to store 'mod_resource' physical files
-- course_df.to_list() to use as parameter in 'if_table_course' function

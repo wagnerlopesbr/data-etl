@@ -138,32 +138,52 @@ def create_course_customfield_data_df(new_course_id, new_course_context_id, cust
     return filtered_df[final_columns]
 
 
-def download_from_ftp(contenthash, course_shortname, course_original_id):
-    local_dir = "src/customcert_images"
+def download_from_ftp(contenthash, filename, course_shortname, course_original_id, element):
+    if element == "customcert":
+        file_ext = ".jpeg"
+        name_part = "conteudo_programatico"
+        base_dir = f"src/files/customcert/{course_shortname}"
+        local_dir = os.path.join(base_dir, "images")
+        texts_dir = os.path.join(base_dir, "texts")
+        os.makedirs(texts_dir, exist_ok=True)
+    else:
+        file_ext = os.path.splitext(filename)[1].lower()
+        name_part = os.path.splitext(filename)[0]
+        local_dir = f"src/files/{element}/{course_shortname}"
+    
     os.makedirs(local_dir, exist_ok=True)
     folder1 = contenthash[:2]
     folder2 = contenthash[2:4]
+
     ftp = FTP()
     ftp.connect(os.getenv("FTP_HOST"), 21)
     ftp.login(user=os.getenv("FTP_USER"), passwd=os.getenv("FTP_PASSWORD"))
     base_dir = os.getenv("FTP_BASE_DIR")
     ftp.cwd(f"{base_dir}/{folder1}/{folder2}")
-    local_filename = f"conteudo_programatico_{course_shortname}.jpeg"
+
+    safe_name_part = name_part.replace(" ", "_")
+    local_filename = f"old_{course_original_id}_{safe_name_part}_{course_shortname}{file_ext}"
     local_path = os.path.join(local_dir, local_filename)
     temp_path = os.path.join(local_dir, f"{contenthash}_temp")
+
     image_text = None
     try:
         with open(temp_path, "wb") as temp_file:
             ftp.retrbinary(f"RETR {contenthash}", temp_file.write)
-        with Image.open(temp_path) as img:
-            if img.mode == "RGBA":
-                background = Image.new("RGBA", img.size, (255, 255, 255))
-                img = Image.alpha_composite(background, img).convert("RGB")
-            else:
-                img = img.convert("RGB")
-            img.save(local_path, "JPEG", quality=95)
-        logger.info(f"File {local_filename} downloaded and converted successfully to {local_dir}.")
-        image_text = extract_text_from_image(os.path.abspath(local_path), course_original_id)
+        
+        if element == "customcert":
+            with Image.open(temp_path) as img:
+                if img.mode == "RGBA":
+                    background = Image.new("RGBA", img.size, (255, 255, 255))
+                    img = Image.alpha_composite(background, img).convert("RGB")
+                else:
+                    img = img.convert("RGB")
+                img.save(local_path, "JPEG", quality=95)
+            logger.info(f"File {local_filename} downloaded and converted successfully to {local_dir}.")
+            image_text = extract_text_from_image(os.path.abspath(local_path), course_shortname)
+        else:
+            os.rename(temp_path, local_path)
+            logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
     except Exception as e:
         logger.error(f"Error downloading file {local_filename}: {e}")
     finally:
@@ -171,10 +191,13 @@ def download_from_ftp(contenthash, course_shortname, course_original_id):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
-    return image_text
+
+    if element == "customcert":
+        return image_text
+    return None
 
 
-def extract_text_from_image(image_path, course_original_id):
+def extract_text_from_image(image_path, course_shortname):
     reader = easyocr.Reader(['pt', 'en'], gpu=True)
     left_img, right_img = split_image(image_path)
     left_text, left_conf = text_extract(left_img, reader)
@@ -182,9 +205,9 @@ def extract_text_from_image(image_path, course_original_id):
     full_text = f"{left_text}\n\n\n{right_text}"
     full_conf = (left_conf + right_conf) / 2
     base = os.path.splitext(os.path.basename(image_path))[0]
-    output_dir = os.path.join("src", "customcert_texts", base)
+    output_dir = os.path.join("src", "files", "customcert", course_shortname, "texts")
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{course_original_id}_{base}.txt")
+    output_path = os.path.join(output_dir, f"{base}.txt")
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(full_text)
     for temp_img in (left_img, right_img):
@@ -400,6 +423,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
         customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
+        resource_content_hash_info_df = dataframes.get("resource_content_hash_info", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
         question_df = dataframes.get("question", pd.DataFrame())
         question_answers_df = dataframes.get("question_answers", pd.DataFrame())
@@ -434,8 +458,9 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 image_text = None
                 if not cc_image_hash_df.empty:
                     contenthash = cc_image_hash_df["contenthash"].iloc[0]
+                    filename = cc_image_hash_df["filename"].iloc[0]
                     course_original_id = course_copy["id"].iloc[0]
-                    image_text = download_from_ftp(contenthash, course_shortname, course_original_id)
+                    image_text = download_from_ftp(contenthash, filename, course_shortname, course_original_id, "customcert")
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
@@ -530,6 +555,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 # RESOURCE
                 resource_to_page_instance_mapping = {}
                 if not resource_df.empty:
+                    resource_content_hash_df = resource_content_hash_info_df[resource_content_hash_info_df["course_id"] == id].copy()
+                    if not resource_content_hash_df.empty:
+                        for _, row in resource_content_hash_df.iterrows():
+                            contenthash = row["contenthash"]
+                            filename = row["filename"]
+                            download_from_ftp(contenthash, filename, course_shortname, course_original_id, "resource")
                     resource_filtered = resource_df[resource_df["course"] == id].copy()
                     if not resource_filtered.empty:
                         for _, row in resource_filtered.iterrows():
@@ -1152,7 +1183,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)
+                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
