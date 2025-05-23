@@ -246,7 +246,37 @@ def text_extract(path, reader):
     return content, avg_conf
 
 
-def create_customcert_instance_df(new_course_id, course_shortname):
+def create_customcert_instance_df(new_course_id, course_shortname, carga_horaria_id):
+    mapped_requiredtime = {
+        "1": 1,
+        "2": 2,
+        "3": 3,
+        "4": 4,
+        "5": 6,
+        "6": 8,
+        "7": 10,
+        "8": 12,
+        "9": 16,
+        "10": 20,
+        "11": 24,
+        "12": 30,
+        "13": 32,
+        "14": 40,
+        "15": 80,
+        "16": 28,
+        "17": 120
+    }
+
+    hours = mapped_requiredtime.get(str(carga_horaria_id), 8)
+    if hours <= 8:
+        requiredtime_minutes = hours * 60
+        journey = 1
+    else:
+        journey = hours // 8
+        if hours % 8 != 0:
+            journey += 1
+        requiredtime_minutes = 480 + (journey - 1) * 1440
+
     default_customcert_df_PTBR = pd.DataFrame([{
         'course': new_course_id,
         'templateid': 0,
@@ -255,7 +285,7 @@ def create_customcert_instance_df(new_course_id, course_shortname):
                     <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Aumente suas chances no mercado de trabalho adicionando seu certificado no LinkedIn através do botão:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"><img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="Botão do LinkedIn para Adicionar ao Perfil"></a></p>
                  """,
         'introformat': 1,
-        'requiredtime': 1,
+        'requiredtime': requiredtime_minutes,
         'verifyany': 1,
         'deliveryoption': 'I',
         'emailstudents': 1,
@@ -274,7 +304,7 @@ def create_customcert_instance_df(new_course_id, course_shortname):
                     <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Increase your chances in the job market by adding your certificate to LinkedIn through the button:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"> <img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="LinkedIn Button to Add to Profile"> </a></p>
                  """,
         'introformat': 1,
-        'requiredtime': 1,
+        'requiredtime': requiredtime_minutes,
         'verifyany': 1,
         'deliveryoption': 'I',
         'emailstudents': 1,
@@ -502,6 +532,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 new_course_context_id = result.scalar()
                 logger.info(f"NEW COURSE CONTEXT ID inserted successfully! NEW COURSE CONTEXT ID: {new_course_context_id}")
                 cf_data_df = customfield_data_old_df[customfield_data_old_df["instanceid"] == id].copy()
+                carga_horaria_id = cf_data_df.loc[cf_data_df["fieldid"] == 8, "value"].iloc[0]
                 cf_data_df = cf_data_df.drop(columns=["id"])
                 customfield_data_df = create_course_customfield_data_df(new_course_id, new_course_context_id, cf_data_df, image_text)
                 if not customfield_data_df.empty:
@@ -738,7 +769,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                                    param_1=id, param_2=new_course_id, param_3="course")
                 
                 # CUSTOMCERT
-                customcert_df = create_customcert_instance_df(new_course_id, course_shortname)
+                customcert_df = create_customcert_instance_df(new_course_id, course_shortname, carga_horaria_id)
                 customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
                 customcert_instance_id = conn.execute(text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                 logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
@@ -1198,7 +1229,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
+                    if_table_course(conn, table, ids=[53, 399, 416], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
