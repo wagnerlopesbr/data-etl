@@ -4,6 +4,7 @@ import os
 from src.logging import start
 from sqlalchemy import text, bindparam
 from src.transform import transform_sequence
+from src.extract import extract_old_course_ids_from_csv
 from datetime import datetime
 from ftplib import FTP
 from dotenv import load_dotenv
@@ -14,6 +15,12 @@ import cv2
 load_dotenv()
 logger = start()
 timestamp = int(datetime.now().timestamp())
+
+
+# tracking data from specific .csv
+csv = 'src/utils/Tabela_de_Cursos_Talisma_teste.csv'
+into_qsms_ids = extract_old_course_ids_from_csv(17, csv)
+print(f"old_galaxia_ids -> into_qsms_ids: {into_qsms_ids}")
 
 
 def insert_and_mapping(conn, loop_id, new_course_id, instance_name, mapping, df, table,
@@ -1229,7 +1236,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399, 416], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
+                    if_table_course(conn, table, ids=into_qsms_ids, dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
