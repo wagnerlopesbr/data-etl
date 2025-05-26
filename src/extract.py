@@ -5,6 +5,13 @@ from src.logging import start
 logger = start()
 
 
+def extract_old_course_ids_from_csv(old_id_category, csv):
+    df = pd.read_csv(csv, sep=';', encoding='latin1')
+    filtered_df = df[df['id_category'] == old_id_category]
+    ids_list = filtered_df['id_course'].tolist()
+    return ids_list
+
+
 def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
     logger.debug(f"-------------------- Starting the extraction process... --------------------")
     
