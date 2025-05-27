@@ -94,6 +94,22 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
                                             WHERE f.filename <> '.'
                                             ORDER BY c.fullname ASC
                                     """,
+        "hvp_content_hash_info": f"""
+                                            SELECT ctx.id AS resource_context_id,
+                                                f.contenthash,
+                                                f.filename,
+                                                h.id as hvp_id,
+                                                h.name as hvp_name,
+                                                c.fullname as course,
+                                                c.id as course_id
+                                            FROM {old_db_prefix}_hvp h
+                                            INNER JOIN {old_db_prefix}_course_modules cm ON cm.instance = h.id AND cm.module = 30
+                                            INNER JOIN {old_db_prefix}_context ctx ON ctx.instanceid = cm.id
+                                            INNER JOIN {old_db_prefix}_course c ON c.id = h.course
+                                            INNER JOIN {old_db_prefix}_files f ON f.component = 'mod_hvp' AND f.contextid = ctx.id
+                                            WHERE f.filename <> '.'
+                                            ORDER BY c.fullname ASC
+                                """,
         "course_format_options": f"SELECT * FROM {old_db_prefix}_course_format_options ORDER BY sectionid ASC",
         "course_modules_sections": f"""
                                        SELECT

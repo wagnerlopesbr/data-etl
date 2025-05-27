@@ -78,17 +78,17 @@ def create_feedback_items_df(feedback_id, items_df):
     return items_df
 
 
-def create_page_ex_resource_df(new_course_id, element_name):
+def create_page_ex_element_df(ex_element, new_course_id, element_name):
     df = pd.DataFrame([{
         "course": new_course_id,
-        "name": f"EX-ARQUIVO(resource: {element_name}) - PRECISA EDITAR",
+        "name": f"EX-{ex_element.upper()}(name: {element_name}) - PRECISA EDITAR",
         "introformat": 1,
         "content": """
                     <div
                     style="position: relative; width: 100%; height: 0; padding-top: 50.0000%; padding-bottom: 0; box-shadow: 0 2px 8px 0 rgba(63,69,81,0.16); margin-top: 1.6em; margin-bottom: 0.9em; overflow: hidden; border-radius: 8px; will-change: transform;">
                     <iframe
                         style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0; margin: 0;"
-                        src="LINK DO CANVA (exemplo) -> https://www.canva.com/design/DAGeDjwbY1s/hf9o_XUQejYP03e1A12RLw/view?embed"
+                        src="LINK EXTERNO (exemplo) -> https://www.canva.com/design/DAGeDjwbY1s/hf9o_XUQejYP03e1A12RLw/view?embed"
                         allow="fullscreen" allowfullscreen="allowfullscreen" loading="lazy">
                     </iframe></div>
                    """,
@@ -472,6 +472,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
         customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
         resource_content_hash_info_df = dataframes.get("resource_content_hash_info", pd.DataFrame())
+        hvp_content_hash_info_df = dataframes.get("hvp_content_hash_info", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
         question_df = dataframes.get("question", pd.DataFrame())
         question_answers_df = dataframes.get("question_answers", pd.DataFrame())
@@ -619,11 +620,19 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         for _, row in resource_filtered.iterrows():
                             old_id = row["id"]
                             resource_name = row["name"]
-                            new_page_ex_resource = create_page_ex_resource_df(new_course_id, resource_name)
+                            new_page_ex_resource = create_page_ex_element_df("resource", new_course_id, resource_name)
                             new_page_ex_resource.to_sql(page_table, conn, if_exists="append", index=False)
                             result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                             resource_to_page_instance_mapping[old_id] = result
                         logger.info(f"{len(resource_filtered)} NEW PAGE element(s) to represent OLD RESOURCE(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
+                
+                # HVP
+                """
+                ---------- TO DO ----------
+                hvp_to_page_instance_mapping = {}
+                hvp_content_hash_info_df
+                """
+                
                 
                 # QUIZ
                 quiz_instance_mapping = {}
