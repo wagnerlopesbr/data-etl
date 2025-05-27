@@ -210,6 +210,7 @@ def download_from_ftp(contenthash, filename, course_shortname, course_original_i
             image_text = extract_text_from_image(os.path.abspath(local_path), course_shortname)
         else:
             os.rename(temp_path, local_path)
+            logger.info(f"File {local_filename} downloaded successfully to {local_dir}.")
     except Exception as e:
         logger.error(f"Error downloading file {local_filename}: {e}")
     finally:
@@ -1283,7 +1284,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
+                    if_table_course(conn, table, ids=into_qsms_ids, dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 

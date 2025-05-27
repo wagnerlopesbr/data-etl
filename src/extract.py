@@ -55,6 +55,7 @@ def extract(old_conn, new_conn, old_db_prefix, new_db_prefix):
         "label": f"SELECT * FROM {old_db_prefix}_label",
         "folder": f"SELECT * FROM {old_db_prefix}_folder",
         "resource": f"SELECT * FROM {old_db_prefix}_resource",
+        "hvp": f"SELECT * FROM {old_db_prefix}_hvp",
         "reengagement": f"SELECT * FROM {old_db_prefix}_reengagement",
         "customcert_image_hash_info": f"""
                                             SELECT ctx.id AS context_id,
