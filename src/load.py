@@ -12,25 +12,14 @@ from PIL import Image
 import easyocr
 import cv2
 
+
 load_dotenv()
 logger = start()
 timestamp = int(datetime.now().timestamp())
 
 
-# tracking data from specific .csv
-csv = 'src/utils/cursos_teste.csv'
-into_qsms_ids = extract_old_course_ids_from_csv(17, csv)
-print(f"old_galaxia_ids -> into_qsms_ids: {into_qsms_ids}")
-
-
-def insert_new_and_mapping(conn, id, mapping, element_df, element_table, content_hash_df, course_shortname, course_original_id, new_course_id, element_type):
+def insert_new_and_mapping(conn, id, mapping, element_df, element_table, new_course_id, element_type):
     if not element_df.empty:
-        element_content_hash_df = content_hash_df[content_hash_df["course_id"] == id].copy()
-        if not element_content_hash_df.empty:
-            for _, row in element_content_hash_df.iterrows():
-                contenthash = row["contenthash"]
-                filename = row["filename"]
-                download_from_ftp(contenthash, filename, course_shortname, course_original_id, element_type)
         element_filtered = element_df[element_df["course"] == id].copy()
         if not element_filtered.empty:
             for _, row in element_filtered.iterrows():
@@ -206,7 +195,6 @@ def download_from_ftp(contenthash, filename, course_shortname, course_original_i
                 else:
                     img = img.convert("RGB")
                 img.save(local_path, "JPEG", quality=95)
-            logger.info(f"File {local_filename} downloaded and converted successfully to {local_dir}.")
             image_text = extract_text_from_image(os.path.abspath(local_path), course_shortname)
         else:
             os.rename(temp_path, local_path)
@@ -408,7 +396,7 @@ def insert_question_type(conn, qtype_name_as_string, qtype_df, qtype_table, ques
                 logger.error(f"Error inserting {qtype_name_as_string.upper()} for course {new_course_id}: {e}")
 
 
-def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
+def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
     course_table = f"{new_db.prefix}_{table}"
     context_table = f"{new_db.prefix}_context"
     sections_table = f"{new_db.prefix}_course_sections"
@@ -489,9 +477,6 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
-        customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
-        resource_content_hash_info_df = dataframes.get("resource_content_hash_info", pd.DataFrame())
-        hvp_content_hash_info_df = dataframes.get("hvp_content_hash_info", pd.DataFrame())
         hvp_df = dataframes.get("hvp", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
         question_df = dataframes.get("question", pd.DataFrame())
@@ -522,14 +507,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
             try:
                 course_copy = course.copy()
                 course_old_context_id = courses_context_df[courses_context_df["instanceid"] == id]["id"].iloc[0]
-                cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
                 course_shortname = course_copy["shortname"].iloc[0]
-                image_text = None
-                if not cc_image_hash_df.empty:
-                    contenthash = cc_image_hash_df["contenthash"].iloc[0]
-                    filename = cc_image_hash_df["filename"].iloc[0]
-                    course_original_id = course_copy["id"].iloc[0]
-                    image_text = download_from_ftp(contenthash, filename, course_shortname, course_original_id, "customcert")
                 course_copy["category"] = category
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
@@ -562,6 +540,7 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                 cf_data_df = customfield_data_old_df[customfield_data_old_df["instanceid"] == id].copy()
                 carga_horaria_id = cf_data_df.loc[cf_data_df["fieldid"] == 8, "value"].iloc[0]
                 cf_data_df = cf_data_df.drop(columns=["id"])
+                image_text = image_texts.get(id)
                 customfield_data_df = create_course_customfield_data_df(new_course_id, new_course_context_id, cf_data_df, image_text)
                 if not customfield_data_df.empty:
                     try:
@@ -628,50 +607,12 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
 
                 # RESOURCE
                 resource_to_page_instance_mapping = {}
-                insert_new_and_mapping(conn, id, resource_to_page_instance_mapping, resource_df, page_table, resource_content_hash_info_df, course_shortname, course_original_id, new_course_id, "resource")
-                """
-                if not resource_df.empty:
-                    resource_content_hash_df = resource_content_hash_info_df[resource_content_hash_info_df["course_id"] == id].copy()
-                    if not resource_content_hash_df.empty:
-                        for _, row in resource_content_hash_df.iterrows():
-                            contenthash = row["contenthash"]
-                            filename = row["filename"]
-                            download_from_ftp(contenthash, filename, course_shortname, course_original_id, "resource")
-                    resource_filtered = resource_df[resource_df["course"] == id].copy()
-                    if not resource_filtered.empty:
-                        for _, row in resource_filtered.iterrows():
-                            old_id = row["id"]
-                            resource_name = row["name"]
-                            new_page_ex_resource = create_page_ex_element_df("resource", new_course_id, resource_name)
-                            new_page_ex_resource.to_sql(page_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
-                            resource_to_page_instance_mapping[old_id] = result
-                        logger.info(f"{len(resource_filtered)} NEW PAGE element(s) to represent OLD RESOURCE(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
-                """
+                insert_new_and_mapping(conn, id, resource_to_page_instance_mapping, resource_df, page_table, new_course_id, "resource")
                 
                 # HVP
                 hvp_to_page_instance_mapping = {}
-                insert_new_and_mapping(conn, id, hvp_to_page_instance_mapping, hvp_df, page_table, hvp_content_hash_info_df, course_shortname, course_original_id, new_course_id, "hvp")
-                """
-                if not hvp_df.empty:
-                    hvp_content_hash_df = hvp_content_hash_info_df[hvp_content_hash_info_df["course_id"] == id].copy()
-                    if not hvp_content_hash_df.empty:
-                        for _, row in hvp_content_hash_df.iterrows():
-                            contenthash = row["contenthash"]
-                            filename = row["filename"]
-                            download_from_ftp(contenthash, filename, course_shortname, course_original_id, "hvp")
-                    hvp_filtered = hvp_df[hvp_df["course"] == id].copy()
-                    if not hvp_filtered.empty:
-                        for _, row in hvp_filtered.iterrows():
-                            old_id = row["id"]
-                            hvp_name = row["name"]
-                            new_page_ex_hvp = create_page_ex_element_df("hvp", new_course_id, hvp_name)
-                            new_page_ex_hvp.to_sql(page_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {page_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
-                            hvp_to_page_instance_mapping[old_id] = result
-                            logger.info(f"{len(hvp_filtered)} NEW PAGE element(s) to represent OLD HVP(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")            
-                """
-                
+                insert_new_and_mapping(conn, id, hvp_to_page_instance_mapping, hvp_df, page_table, new_course_id, "hvp")
+                               
                 # QUIZ
                 quiz_instance_mapping = {}
                 if not quiz_df.empty:
@@ -860,19 +801,24 @@ def if_table_course(conn, table: str, ids: List[int], dataframes: Dict[str, pd.D
                         course_modules_filtered_df["module"] == url_module_id, "instance"
                     ].map(lambda inst: url_instance_mapping.get(inst, inst))
 
-                    # changing the page (and old resources) instances ids
-                    all_page_instance_mapping = {**page_instance_mapping, **resource_to_page_instance_mapping}
+                    # changing the page (and old resources/hvps) instances ids
+                    all_page_instance_mapping = {**page_instance_mapping, **resource_to_page_instance_mapping, **hvp_to_page_instance_mapping}
 
                     page_module_id = new_modules_map.get("page")
                     resource_module_id = new_modules_map.get("resource")
+                    hvp_module_id = new_modules_map.get("hvp")
                     course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"].isin([page_module_id, resource_module_id]), "instance"
+                        course_modules_filtered_df["module"].isin([page_module_id, resource_module_id, hvp_module_id]), "instance"
                     ] = course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"].isin([page_module_id, resource_module_id]), "instance"
+                        course_modules_filtered_df["module"].isin([page_module_id, resource_module_id, hvp_module_id]), "instance"
                     ].map(lambda inst: all_page_instance_mapping.get(inst, inst))
 
                     course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == resource_module_id, "module"
+                    ] = page_module_id
+
+                    course_modules_filtered_df.loc[
+                        course_modules_filtered_df["module"] == hvp_module_id, "module"
                     ] = page_module_id
 
                     # changing the forum instances ids
@@ -1265,7 +1211,47 @@ def get_unique_filename(output_dir: str) -> str:
         version += 1
 
 
-def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
+def downloading(dataframes: Dict[str, pd.DataFrame], ids: List[int]):
+    logger.debug(f"-------------------- Starting the downloading process... --------------------")
+
+    resource_content_hash_info_df = dataframes.get("resource_content_hash_info", pd.DataFrame())
+    hvp_content_hash_info_df = dataframes.get("hvp_content_hash_info", pd.DataFrame())
+    course_df = dataframes.get("course", pd.DataFrame())
+    customcert_image_hash_info_df = dataframes.get("customcert_image_hash_info", pd.DataFrame())
+
+    image_texts = {}
+
+    for id in ids:
+        course = course_df[course_df["id"] == id]
+        course_copy = course.copy()
+        course_shortname = course_copy["shortname"].iloc[0]
+
+        cc_image_hash_df = customcert_image_hash_info_df[customcert_image_hash_info_df["course_id"] == id].copy()
+        image_text = None
+        if not cc_image_hash_df.empty:
+            contenthash = cc_image_hash_df["contenthash"].iloc[0]
+            filename = cc_image_hash_df["filename"].iloc[0]
+            image_text = download_from_ftp(contenthash, filename, course_shortname, id, "customcert")
+        image_texts[id] = image_text
+
+        resource_hash_df = resource_content_hash_info_df[resource_content_hash_info_df["course_id"] == id].copy()
+        if not resource_hash_df.empty:
+            for _, row in resource_hash_df.iterrows():
+                contenthash = row["contenthash"]
+                filename = row["filename"]
+                download_from_ftp(contenthash, filename, course_shortname, id, "resource")
+        
+        hvp_hash_df = hvp_content_hash_info_df[hvp_content_hash_info_df["course_id"] == id].copy()
+        if not hvp_hash_df.empty:
+            for _, row in hvp_hash_df.iterrows():
+                contenthash = row["contenthash"]
+                filename = row["filename"]
+                download_from_ftp(contenthash, filename, course_shortname, id, "hvp")
+
+    logger.info(f"-------------------- End of downloading process. --------------------")
+    return image_texts
+
+def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], image_texts: Dict[int, str]):
     logger.debug(f"-------------------- Starting the loading process... --------------------")
 
     output_dir = "src/loaded"
@@ -1283,7 +1269,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db):
                 logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, table, ids=[53, 399], dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
+                    if_table_course(conn, image_texts, table, ids, dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 

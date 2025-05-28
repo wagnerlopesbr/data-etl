@@ -20,3 +20,7 @@ source .venv/bin/activate
 ```bash
 source .venv/bin/activate
 ```
+
+### reminder (to Wagner; to be deleted)
+- upgrade 'hvp' logic to insert as 'page' (such as 'resource' already does)
+- try to migrate some of the 'hvp' elements (only games) as actually 'hvp' too
