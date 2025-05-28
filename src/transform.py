@@ -69,7 +69,7 @@ def transform_sections(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Data
     return dataframes
 
 
-def transform_sequence(sequence_str, map, hvp_ids=None):
+def transform_sequence(sequence_str, map):
     if pd.isna(sequence_str) or sequence_str == "":
         return sequence_str
     
@@ -81,9 +81,6 @@ def transform_sequence(sequence_str, map, hvp_ids=None):
             continue
 
         int_old_id = int(old_id)
-
-        if hvp_ids and int_old_id in hvp_ids:
-            continue
 
         new_id = map.get(int_old_id, old_id)
         new_ids.append(str(new_id))
