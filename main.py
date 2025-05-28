@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine
-from src.extract import extract
+from src.extract import extract, extract_old_course_ids_from_csv
 from src.transform import transform
-from src.load import load
+from src.load import load, downloading
 from src.logging import start
 from urllib.parse import quote_plus
 from types import SimpleNamespace
@@ -47,24 +47,40 @@ new_engine = create_engine(
 def main():
     try:
         logger.debug("------------------------------------------ NEW ETL RUN ------------------------------------------")
+        logger.debug("ETL process started...")
+
         # close any previous connection pool to start clean
         old_engine.dispose()
         new_engine.dispose()
-        logger.debug("ETL process started...")
 
         # Use connection context managers
         # - old_engine.connect(): read-only, better for performance (no locking/transactions)
         # - new_engine.begin(): transactional, used for write operations (auto commit/rollback)
+
+        # tracking data from specific .csv
+        csv = 'src/utils/cursos_teste.csv'
+        ids_to_migrate = extract_old_course_ids_from_csv(10, csv)
+                
+        with old_engine.connect() as old_conn:
+            old_dataframes = extract(old_conn, old_db.prefix, "old")
         
-        with old_engine.connect() as old_conn, new_engine.connect() as new_conn:
-            dataframes = extract(old_conn, new_conn, old_db.prefix, new_db.prefix)
-            dataframes = transform(dataframes)
-        with new_engine.begin() as trans_conn:
-            load(dataframes, trans_conn, new_db)
+        with new_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as new_conn:
+            new_dataframes = extract(new_conn, new_db.prefix, "new")
+
+        dataframes = {**old_dataframes, **new_dataframes}
+
+        dataframes = transform(dataframes)
+        
+        image_texts = downloading(dataframes, ids_to_migrate)
+        with new_engine.begin() as write_conn:
+            load(dataframes, write_conn, new_db, ids_to_migrate, image_texts)
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
     finally:
+        # close any previous connection pool to start clean
+        old_engine.dispose()
+        new_engine.dispose()
         logger.debug("Disposed all database connections after ETL run.")
 
 if __name__ == "__main__":

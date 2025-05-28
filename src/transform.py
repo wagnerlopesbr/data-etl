@@ -115,7 +115,7 @@ def transform(dataframes):
     if not has_relevant_dataframe:
         logger.info("No relevant dataframes to transform.")
         return dataframes
-    logger.debug("Starting the transforming process...")
+    logger.debug(f"-------------------- Starting the transforming process... --------------------")
 
     if "page" in dataframes:
         try:
@@ -137,6 +137,6 @@ def transform(dataframes):
         except Exception as e:
             logger.error(f"Error transforming REENGAGEMENT: {e}")
 
-    logger.info("End of transforming process.")
+    logger.info(f"-------------------- End of transforming process. --------------------")
 
     return dataframes
