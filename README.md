@@ -22,5 +22,7 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- upgrade 'hvp' logic to insert as 'page' (such as 'resource' already does)
+- create 'customcert_templates' basically to each different 'course_category' (not able to use the same template for all courses)
+- adapt 'load.py' logic to be called more then one time (each call for each category)
+- adapt 'if_table_course' logic to be able to be called with optional parameteres related to course language
 - try to migrate some of the 'hvp' elements (only games) as actually 'hvp' too

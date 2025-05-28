@@ -180,6 +180,11 @@ def download_from_ftp(contenthash, filename, course_shortname, course_original_i
     safe_name_part = name_part.replace(" ", "_")
     local_filename = f"old_{course_original_id}_{safe_name_part}_{course_shortname}{file_ext}"
     local_path = os.path.join(local_dir, local_filename)
+    if os.path.exists(local_path):
+        logger.info(f"File {local_filename} already exists. Skipping download.")
+        if element == "customcert":
+            return extract_text_from_image(os.path.abspath(local_path), course_shortname)
+        return None
     temp_path = os.path.join(local_dir, f"{contenthash}_temp")
 
     image_text = None
@@ -776,7 +781,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(
                         lambda func: new_modules_map.get(old_modules_map.get(func))
                     )
-                    hvp_module_ids = set(course_modules_filtered_df[course_modules_filtered_df["module"] == 27]["id"].tolist())
+                    #hvp_module_ids = set(course_modules_filtered_df[course_modules_filtered_df["module"] == 27]["id"].tolist())
                     # changing the quiz instances ids
                     quiz_module_id = new_modules_map.get("quiz")
                     course_modules_filtered_df.loc[
@@ -884,10 +889,13 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                     (:course, :module, :instance, :section, :added, :score, :indent, :visible, :visibleold, :groupmode, :groupingid, :completion, :completiongradeitemnumber, :completionview, :completionexpected, :availability, :showdescription)
                                     """
                         )
-                        contional_modules = [7, 8, 16, 17, 18, 21, 27, 29]  # modules to be inserted with specific RESTRICTIONS
+                        contional_modules = [5, 7, 8, 16, 17, 18, 21, 27, 29]  # modules to be inserted with specific RESTRICTIONS
+                        contional_modules2 = [13]  # modules to be inserted with specific RESTRICTIONS
                         """
+                        5 = choice
                         7 = feedback
                         8 = folder
+                        13 = label
                         16 = page
                         17 = quiz
                         18 = resource
@@ -897,6 +905,8 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         """
                         if row["module"] in contional_modules:
                             row["availability"] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[true]}'
+                        if row["module"] in contional_modules2:
+                            row["availability"] = '{"op":"|","c":[],"show":true}'
                         row_cleaned = row.replace({pd.NA: None, '': None}).where(pd.notnull(row), None)
                         row_dict = row_cleaned.to_dict()
                         conn.execute(sql, row_dict)
@@ -1144,7 +1154,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         regex=False
                     )
 
-                    course_sections_df["sequence"] = course_sections_df["sequence"].apply(lambda seq: transform_sequence(seq, module_instance_mapping, hvp_module_ids))
+                    course_sections_df["sequence"] = course_sections_df["sequence"].apply(lambda seq: transform_sequence(seq, module_instance_mapping))
                     course_sections_df.to_sql(sections_table, conn, if_exists="append", index=False)
                     logger.info(f"{len(course_sections_df)} section(s) inserted for course {new_course_id}.")
 
@@ -1175,14 +1185,11 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                                             {"course_id": new_course_id, "content_section": content_section}).scalar()
                     
                     if daughter_content_section:
-                        sequence_ids = [int(x) for x in daughter_content_section.split(",") if x.strip().isdigit()]
-                        hvp_ids_result = conn.execute(text(f"SELECT id FROM {course_modules_table} WHERE course = :course_id AND module = 27"), {"course_id": new_course_id}).fetchall()
-                        hvp_ids = {row[0] for row in hvp_ids_result}
-                        filtered_sequence_ids = [cm_id for cm_id in sequence_ids if cm_id not in hvp_ids]                
-                        if filtered_sequence_ids:
+                        sequence_ids = [int(x) for x in daughter_content_section.split(",") if x.strip().isdigit()]              
+                        if sequence_ids:
                             availability_placeholder = '{"op":"|","c":[],"show":true}'
                             conn.execute(text(f"UPDATE {course_modules_table} SET availability = :availability WHERE course = :course_id AND id = :id"),
-                                         {"course_id": new_course_id, "id": filtered_sequence_ids[0], "availability": availability_placeholder})
+                                         {"course_id": new_course_id, "id": sequence_ids[0], "availability": availability_placeholder})
                     logger.info("All course_sections updated with correct sequences.")
 
                 # COURSE FORMAT OPTIONS
@@ -1266,7 +1273,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], imag
                     logger.warning(f"{table.upper()} is empty.")
                     continue
 
-                logger.info(f"{table.upper()} extracted successfully with {len(df)} rows.")
+                logger.info(f"{table.upper()} loaded successfully with {len(df)} rows.")
 
                 if table == "course":
                     if_table_course(conn, image_texts, table, ids, dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
