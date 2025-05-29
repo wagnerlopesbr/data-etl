@@ -59,7 +59,9 @@ def extract(conn, db_prefix, origin: str):
             "label": f"SELECT * FROM {db_prefix}_label",
             "folder": f"SELECT * FROM {db_prefix}_folder",
             "resource": f"SELECT * FROM {db_prefix}_resource",
-            "hvp": f"SELECT * FROM {db_prefix}_hvp",
+            "hvp_contents_libraries": f"SELECT * FROM {db_prefix}_hvp_contents_libraries WHERE library_id IN (11, 12, 44, 79, 80, 81, 82, 83, 100, 104, 107, 113, 114, 124, 133, 134, 137, 141, 142, 145, 146, 150, 151, 153, 154, 156)",
+            "hvp": f"SELECT * FROM {db_prefix}_hvp WHERE main_library_id IN (84, 140, 143)",
+            "hvp_games": f"SELECT * FROM {db_prefix}_hvp WHERE main_library_id IN (11, 12, 44, 79, 80, 81, 82, 83, 100, 104, 107, 113, 114, 124, 133, 134, 137, 141, 142, 145, 146, 150, 151, 153, 154, 156)",
             "reengagement": f"SELECT * FROM {db_prefix}_reengagement",
             "customcert_image_hash_info": f"""
                                                 SELECT ctx.id AS context_id,
