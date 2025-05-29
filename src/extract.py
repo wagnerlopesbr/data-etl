@@ -13,7 +13,7 @@ def extract_old_course_ids_from_csv(old_id_category, csv):
 
 
 def extract(conn, db_prefix, origin: str):
-    logger.debug(f"-------------------- Starting the extraction process... --------------------")
+    logger.debug(f"-------------------- Starting the {origin.upper()} extraction process... --------------------")
     dataframes = {}
 
     specific_joins = ["page", "feedback", "quiz", "url", "forum", "reengagement"]
@@ -59,9 +59,7 @@ def extract(conn, db_prefix, origin: str):
             "label": f"SELECT * FROM {db_prefix}_label",
             "folder": f"SELECT * FROM {db_prefix}_folder",
             "resource": f"SELECT * FROM {db_prefix}_resource",
-            "hvp_contents_libraries": f"SELECT * FROM {db_prefix}_hvp_contents_libraries WHERE library_id IN (11, 12, 44, 79, 80, 81, 82, 83, 100, 104, 107, 113, 114, 124, 133, 134, 137, 141, 142, 145, 146, 150, 151, 153, 154, 156)",
             "hvp": f"SELECT * FROM {db_prefix}_hvp WHERE main_library_id IN (84, 140, 143)",
-            "hvp_games": f"SELECT * FROM {db_prefix}_hvp WHERE main_library_id IN (11, 12, 44, 79, 80, 81, 82, 83, 100, 104, 107, 113, 114, 124, 133, 134, 137, 141, 142, 145, 146, 150, 151, 153, 154, 156)",
             "reengagement": f"SELECT * FROM {db_prefix}_reengagement",
             "customcert_image_hash_info": f"""
                                                 SELECT ctx.id AS context_id,
@@ -175,5 +173,5 @@ def extract(conn, db_prefix, origin: str):
             logger.error(f"Query for {table.upper()} failed: {query}.")
             logger.error(f"Error extracting {table.upper()} from {origin.upper()} DB: {e}.")
             
-    logger.info(f"-------------------- End of extraction process. --------------------")
+    logger.info(f"-------------------- End of {origin.upper()} extraction process. --------------------")
     return dataframes
