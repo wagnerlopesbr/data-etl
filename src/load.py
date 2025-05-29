@@ -448,8 +448,6 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
     feedback_table = f"{new_db.prefix}_feedback"
     feedback_item_table = f"{new_db.prefix}_feedback_item"
     local_recompletion_config_table = f"{new_db.prefix}_local_recompletion_config"
-    hvp_table = f"{new_db.prefix}_hvp"
-    hvp_contents_libraries_table = f"{new_db.prefix}_hvp_contents_libraries"
     
     module_instance_mapping = {}
 
@@ -484,9 +482,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
         cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
         cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
-        hvp_contents_libraries_df = dataframes.get("hvp_contents_libraries", pd.DataFrame())
         hvp_df = dataframes.get("hvp", pd.DataFrame())
-        hvp_games_df = dataframes.get("hvp_games", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
         question_df = dataframes.get("question", pd.DataFrame())
         question_answers_df = dataframes.get("question_answers", pd.DataFrame())
@@ -621,29 +617,6 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                 # HVP
                 hvp_to_page_instance_mapping = {}
                 insert_new_and_mapping(conn, id, hvp_to_page_instance_mapping, hvp_df, page_table, new_course_id, "hvp")
-
-                # HVP GAMES
-                hvp_games_instance_mapping = {}
-                if not hvp_games_df.empty:
-                    hvp_games_filtered = hvp_games_df[hvp_games_df["course"] == id].copy()
-                    hvp_contents_libraries_partial_filtered = hvp_contents_libraries_df[hvp_contents_libraries_df["hvp_id"] == hvp_games_filtered["id"]].copy()
-                    hvp_contents_libraries_filtered = hvp_contents_libraries_partial_filtered[hvp_contents_libraries_partial_filtered["library_id"] == hvp_games_filtered["main_library_id"]].copy()
-                    """
-                    if not hvp_games_filtered.empty:
-                        old_hvp_game_ids = hvp_games_filtered["id"].tolist()
-                        hvp_games_filtered["course"] = new_course_id
-                        hvp_games_filtered = hvp_games_filtered.drop(columns=["id"])
-                        try:
-                            hvp_games_filtered.to_sql(hvp_table, conn, if_exists="append", index=False)
-                            result = conn.execute(text(f"SELECT id FROM {hvp_table} WHERE course = :course_id ORDER BY id"), {"course_id": new_course_id}).fetchall()
-                            new_hvp_game_ids = [row[0] for row in result]
-                            hvp_games_instance_mapping.update(dict(zip(old_hvp_game_ids, new_hvp_game_ids)))
-                            logger.info(f"{len(hvp_games_filtered)} HVP game(s) inserted for course {new_course_id}.")
-                        except Exception as e:
-                            logger.error(f"Error inserting HVP GAMES for course {new_course_id}: {e}")
-                    else:
-                        logger.warning(f"No HVP GAMES entries found for course {id}.")
-                    """
                                
                 # QUIZ
                 quiz_instance_mapping = {}
@@ -808,7 +781,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     course_modules_filtered_df["module"] = course_modules_filtered_df["module"].map(
                         lambda func: new_modules_map.get(old_modules_map.get(func))
                     )
-                    #hvp_module_ids = set(course_modules_filtered_df[course_modules_filtered_df["module"] == 27]["id"].tolist())
+
                     # changing the quiz instances ids
                     quiz_module_id = new_modules_map.get("quiz")
                     course_modules_filtered_df.loc[

@@ -71,9 +71,9 @@ def main():
 
         dataframes = transform(dataframes)
         
-        image_texts = downloading(dataframes, [144])
+        image_texts = downloading(dataframes, ids_to_migrate)
         with new_engine.begin() as write_conn:
-            load(dataframes, write_conn, new_db, [144], image_texts)
+            load(dataframes, write_conn, new_db, ids_to_migrate, image_texts)
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
