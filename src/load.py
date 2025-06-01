@@ -4,7 +4,6 @@ import os
 from src.logging import start
 from sqlalchemy import text, bindparam
 from src.transform import transform_sequence
-from src.extract import extract_old_course_ids_from_csv
 from datetime import datetime
 from ftplib import FTP
 from dotenv import load_dotenv
@@ -29,7 +28,7 @@ def insert_new_and_mapping(conn, id, mapping, element_df, element_table, new_cou
                 new_page_ex_element.to_sql(element_table, conn, if_exists="append", index=False)
                 result = conn.execute(text(f"SELECT id FROM {element_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                 mapping[old_id] = result
-                logger.info(f"{len(element_filtered)} NEW PAGE element(s) to represent OLD {element_type.upper()}(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
+            logger.info(f"{len(element_filtered)} NEW PAGE element(s) to represent OLD {element_type.upper()}(s) inserted successfully! OLD COURSE ID: {id} | NEW COURSE ID: {new_course_id}")
 
 
 def insert_and_mapping(conn, loop_id, new_course_id, instance_name, mapping, df, table,
@@ -64,11 +63,14 @@ def insert_and_mapping(conn, loop_id, new_course_id, instance_name, mapping, df,
             logger.warning(f"No {instance_name.upper()} entries found for course {loop_id}.")
 
 
-def create_feedback_instance_df(new_course_id, course_shortname):
-    english = course_shortname.upper().startswith("EN") or course_shortname.upper().endswith("EN")
+def create_feedback_instance_df(new_course_id, course_language):
+    if course_language == "en":
+        name = "Satisfaction Feedback"
+    else:
+        name = "Pesquisa de Satisfação"
     df = pd.DataFrame([{
         "course": new_course_id,
-        "name": "Pesquisa de Satisfação" if not english else "Satisfaction Feedback",
+        "name": name,
         "introformat": 1,
         "anonymous": 2,
         "email_notification": 0,
@@ -265,7 +267,7 @@ def text_extract(path, reader):
     return content, avg_conf
 
 
-def create_customcert_instance_df(new_course_id, course_shortname, carga_horaria_id):
+def create_customcert_instance_df(new_course_id, carga_horaria_id, course_language):
     mapped_requiredtime = {
         "1": 1,
         "2": 2,
@@ -295,33 +297,23 @@ def create_customcert_instance_df(new_course_id, course_shortname, carga_horaria
         if hours % 8 != 0:
             journey += 1
         requiredtime_minutes = 480 + (journey - 1) * 1440
-
-    default_customcert_df_PTBR = pd.DataFrame([{
-        'course': new_course_id,
-        'templateid': 0,
-        'name': "Certificado de Conclusão",
-        'intro': """
-                    <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Aumente suas chances no mercado de trabalho adicionando seu certificado no LinkedIn através do botão:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"><img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="Botão do LinkedIn para Adicionar ao Perfil"></a></p>
-                 """,
-        'introformat': 1,
-        'requiredtime': requiredtime_minutes,
-        'verifyany': 1,
-        'deliveryoption': 'I',
-        'emailstudents': 1,
-        'emailteachers': 0,
-        'emailothers': 'certificado@talisma.seg.br',
-        'protection': 'modify',
-        'timecreated': timestamp,
-        'timemodified': timestamp
-    }])
-
-    default_customcert_df_EN = pd.DataFrame([{
-        'course': new_course_id,
-        'templateid': 0,
-        'name': "Certificate of Completion",
-        'intro': """
+    
+    if course_language == "en":
+        name = "Certificate of Completion"
+        intro = """
                     <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Increase your chances in the job market by adding your certificate to LinkedIn through the button:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"> <img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="LinkedIn Button to Add to Profile"> </a></p>
-                 """,
+                """
+    else:
+        name = "Certificado de Conclusão"
+        intro = """
+                    <p dir="ltr" id="yui_3_17_2_1_1729087267826_1221"><strong>Aumente suas chances no mercado de trabalho adicionando seu certificado no LinkedIn através do botão:</strong><br><a id="yui_3_17_2_1_1729087267826_1238" href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&amp;name={coursename}&amp;organizationId=71701836&amp;issueYear={siteyear}&amp;certUrl=https://talisma.seg.br&amp;certId={userid}/{courseidnumber}" target="_blank" rel="noopener"><img id="yui_3_17_2_1_1729087267826_1239" src="https://download.linkedin.com/desktop/add2profile/buttons/pt_BR.png" alt="Botão do LinkedIn para Adicionar ao Perfil"></a></p>
+                """
+
+    default_customcert_df = pd.DataFrame([{
+        'course': new_course_id,
+        'templateid': 0,
+        'name': name,
+        'intro': intro,
         'introformat': 1,
         'requiredtime': requiredtime_minutes,
         'verifyany': 1,
@@ -334,10 +326,7 @@ def create_customcert_instance_df(new_course_id, course_shortname, carga_horaria
         'timemodified': timestamp
     }])
 
-    upper_shortname = course_shortname.upper()
-    if upper_shortname.startswith("EN") or upper_shortname.endswith("EN"):
-        return default_customcert_df_EN
-    return default_customcert_df_PTBR
+    return default_customcert_df
 
 
 def create_customcert_template_df(df, contextid, course_shortname):
@@ -401,7 +390,7 @@ def insert_question_type(conn, qtype_name_as_string, qtype_df, qtype_table, ques
                 logger.error(f"Error inserting {qtype_name_as_string.upper()} for course {new_course_id}: {e}")
 
 
-def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], category: int = 1, new_db: str = ''):
+def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: Dict[str, pd.DataFrame], new_db: str = '', category: int = 1, cc_template_to_use=None, course_language=None):
     course_table = f"{new_db.prefix}_{table}"
     context_table = f"{new_db.prefix}_context"
     sections_table = f"{new_db.prefix}_course_sections"
@@ -473,14 +462,10 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
         reengagement_df = dataframes.get("reengagement", pd.DataFrame())
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
-        feedback_item_ptbr_df = dataframes.get("feedback_item_ptbr", pd.DataFrame())
-        feedback_item_en_df = dataframes.get("feedback_item_en", pd.DataFrame())
-        cc_templates_br_df = dataframes.get("customcert_templates_ptbr", pd.DataFrame())
-        cc_pages_br_df = dataframes.get("customcert_pages_ptbr", pd.DataFrame())
-        cc_elements_br_df = dataframes.get("customcert_elements_ptbr", pd.DataFrame())
-        cc_templates_en_df = dataframes.get("customcert_templates_en", pd.DataFrame())
-        cc_pages_en_df = dataframes.get("customcert_pages_en", pd.DataFrame())
-        cc_elements_en_df = dataframes.get("customcert_elements_en", pd.DataFrame())
+        feedback_item_df = dataframes.get(f"feedback_item_{course_language}", pd.DataFrame())
+        cc_templates_df = dataframes.get(f"cc_templates_{cc_template_to_use}", pd.DataFrame())
+        cc_pages_df = dataframes.get(f"cc_pages_{cc_template_to_use}", pd.DataFrame())
+        cc_elements_df = dataframes.get(f"cc_elements_{cc_template_to_use}", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
         hvp_df = dataframes.get("hvp", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
@@ -528,13 +513,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
 
                 # category
                 category_id = course_copy["category"].iloc[0]
-                result = conn.execute(text(
-                    f"""
-                    SELECT id FROM {context_table}
-                    WHERE contextlevel = 40 AND instanceid = {category_id}
-                    LIMIT 1
-                    """
-                ))
+                result = conn.execute(text(f"SELECT id FROM {context_table} WHERE contextlevel = 40 AND instanceid = {category_id} LIMIT 1"))
                 context_category_id = result.scalar()
 
                 # create course context (contextlevel 50)
@@ -590,25 +569,15 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                 
                 # FEEDBACK
                 new_feedback_id = None
-                if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
-                    if not feedback_item_en_df.empty:
-                        fb_item_df = feedback_item_en_df.copy()
-                        fb_df = create_feedback_instance_df(new_course_id, course_shortname)
-                        fb_df.to_sql(feedback_table, conn, if_exists="append", index=False)
-                        result = conn.execute(text(f"SELECT id FROM {feedback_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
-                        feedback_item_df = create_feedback_items_df(result, fb_item_df)
-                        feedback_item_df.to_sql(feedback_item_table, conn, if_exists="append", index=False)
-                        new_feedback_id = result
-                else:
-                    if not feedback_item_ptbr_df.empty:
-                        fb_item_df = feedback_item_ptbr_df.copy()
-                        fb_df = create_feedback_instance_df(new_course_id, course_shortname)
-                        fb_df.to_sql(feedback_table, conn, if_exists="append", index=False)
-                        result = conn.execute(text(f"SELECT id FROM {feedback_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
-                        feedback_item_df = create_feedback_items_df(result, fb_item_df)
-                        feedback_item_df.to_sql(feedback_item_table, conn, if_exists="append", index=False)
-                        new_feedback_id = result
-                    logger.info(f"{len(feedback_item_df)} feedback item(s) inserted for course {new_course_id}.")
+                if not feedback_item_df.empty:
+                    fb_item_df = feedback_item_df.copy()
+                    fb_df = create_feedback_instance_df(new_course_id, course_language)
+                    fb_df.to_sql(feedback_table, conn, if_exists="append", index=False)
+                    result = conn.execute(text(f"SELECT id FROM {feedback_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                    fi_df = create_feedback_items_df(result, fb_item_df)
+                    fi_df.to_sql(feedback_item_table, conn, if_exists="append", index=False)
+                    new_feedback_id = result
+                logger.info(f"{len(fi_df)} feedback item(s) inserted for course {new_course_id}.")
 
                 # RESOURCE
                 resource_to_page_instance_mapping = {}
@@ -624,7 +593,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     quiz_filtered = quiz_df[quiz_df["course"] == id].copy()
                     if not quiz_filtered.empty:
                         old_quiz_ids = quiz_filtered["id"].tolist()
-                        if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
+                        if course_language == "en":
                             quiz_filtered["name"] = "Final Assessment"
                         else:
                             quiz_filtered["name"] = "Avaliação Final"
@@ -769,7 +738,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                    param_1=id, param_2=new_course_id, param_3="course")
                 
                 # CUSTOMCERT
-                customcert_df = create_customcert_instance_df(new_course_id, course_shortname, carga_horaria_id)
+                customcert_df = create_customcert_instance_df(new_course_id, carga_horaria_id, course_language)
                 customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
                 customcert_instance_id = conn.execute(text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                 logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
@@ -984,10 +953,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     customcert_cm_context_id = conn.execute(text(f"SELECT id FROM {context_table} WHERE instanceid = :instanceid AND contextlevel = 70 ORDER BY id DESC LIMIT 1"), {"instanceid": customcert_cm_id}).scalar()
                     logger.info(f"NEW CUSTOMCERT CM CONTEXT ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT CM CONTEXT ID: {customcert_cm_context_id}")
 
-                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
-                        customcert_template_df = create_customcert_template_df(cc_templates_en_df.copy(), customcert_cm_context_id, course_shortname)
-                    else:
-                        customcert_template_df = create_customcert_template_df(cc_templates_br_df.copy(), customcert_cm_context_id, course_shortname)
+                    customcert_template_df = create_customcert_template_df(cc_templates_df.copy(), customcert_cm_context_id, course_shortname)
                     customcert_template_df.to_sql(f"{cc_templates_table}", conn, if_exists="append", index=False)
                     customcert_template_id = conn.execute(text(f"SELECT id FROM {cc_templates_table} WHERE contextid = :context_id ORDER BY id DESC LIMIT 1"), {"context_id": customcert_cm_context_id}).scalar()
                     
@@ -998,20 +964,14 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     )
                     logger.info(f"NEW CUSTOMCERT TEMPLATE ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT TEMPLATE ID: {customcert_template_id}")
 
-                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
-                        customcert_pages_df = create_customcert_page_df(cc_pages_en_df.copy(), customcert_template_id)
-                    else:
-                        customcert_pages_df = create_customcert_page_df(cc_pages_br_df.copy(), customcert_template_id)
+                    customcert_pages_df = create_customcert_page_df(cc_pages_df.copy(), customcert_template_id)
                     customcert_pages_df.to_sql(f"{cc_pages_table}", conn, if_exists="append", index=False)
                     customcert_pages_ids = conn.execute(text(f"SELECT id FROM {cc_pages_table} WHERE templateid = :templateid ORDER BY id, sequence ASC"),
                                                         {"templateid": customcert_template_id}).fetchall()
                     cc_pages_ids = [row[0] for row in customcert_pages_ids]
                     logger.info(f"NEW CUSTOMCERT PAGES IDS inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT PAGES IDS: {cc_pages_ids}")
                     
-                    if course_shortname.startswith("EN") or course_shortname.endswith("EN"):
-                        customcert_elements_df = create_customcert_elements_df(cc_elements_en_df.copy(), cc_pages_ids)
-                    else:
-                        customcert_elements_df = create_customcert_elements_df(cc_elements_br_df.copy(), cc_pages_ids)
+                    customcert_elements_df = create_customcert_elements_df(cc_elements_df.copy(), cc_pages_ids)
                     customcert_elements_df.to_sql(f"{cc_elements_table}", conn, if_exists="append", index=False)
                     customcert_elements_ids = conn.execute(text(f"SELECT id FROM {cc_elements_table} WHERE pageid IN :pageids ORDER BY id, sequence ASC"), {"pageids": tuple(cc_pages_ids)}).fetchall()
                     cc_elements_ids = [row[0] for row in customcert_elements_ids]
@@ -1028,7 +988,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     mask1 = course_sections_df["name"].str.strip().str.lower().isin(["avaliações finais", "certificado", "final assessments", "certificate"])
                     course_sections_df.loc[mask1, "availability"] = '{"op":"&","c":[{"type":"completion","cm":-1,"e":1}],"showc":[false]}'
                     mask2 = course_sections_df["name"].str.strip().str.lower().isin(["avaliações finais", "final assessments"])
-                    if course_shortname.upper().startswith("EN") or course_shortname.upper().endswith("EN"):
+                    if course_language == "en":
                         summary_text = """
                                         <div id="yui_3_17_2_1_1729086180475_803" align="right">
                                         <table>
@@ -1258,7 +1218,7 @@ def downloading(dataframes: Dict[str, pd.DataFrame], ids: List[int]):
     logger.info(f"-------------------- End of downloading process. --------------------")
     return image_texts
 
-def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], image_texts: Dict[int, str]):
+def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], image_texts: Dict[int, str], category_to_insert, cc_template_to_use: str, course_language: str):
     logger.debug(f"-------------------- Starting the loading process... --------------------")
 
     output_dir = "src/loaded"
@@ -1276,7 +1236,7 @@ def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], imag
                 logger.info(f"{table.upper()} loaded successfully with {len(df)} rows.")
 
                 if table == "course":
-                    if_table_course(conn, image_texts, table, ids, dataframes=dataframes, category=1, new_db=new_db)  # if need to insert courses into another category, call 'if_table_course' again
+                    if_table_course(conn, image_texts, table, ids, dataframes=dataframes, new_db=new_db, category=category_to_insert, cc_template_to_use=cc_template_to_use, course_language=course_language)
 
                 logger.info(f"{table.upper()} has {len(df.columns)} columns: {df.columns.tolist()}.")
 
