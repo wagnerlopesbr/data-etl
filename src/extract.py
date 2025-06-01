@@ -5,10 +5,9 @@ from src.logging import start
 logger = start()
 
 
-def extract_old_course_ids_from_csv(old_id_category, csv):
+def extract_old_course_ids_from_csv(csv):
     df = pd.read_csv(csv, sep=';', encoding='latin1')
-    filtered_df = df[df['id_category'] == old_id_category]
-    ids_list = filtered_df['id_course'].tolist()
+    ids_list = df['id_course'].tolist()
     return ids_list
 
 
@@ -152,12 +151,27 @@ def extract(conn, db_prefix, origin: str):
             """
     else:
         queries = {
-            "customcert_templates_ptbr": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 2 LIMIT 1",
-            "customcert_pages_ptbr": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 2 ORDER BY id, sequence ASC",
-            "customcert_elements_ptbr": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (3, 10) ORDER BY pageid, sequence ASC",
-            "customcert_templates_en": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 15 LIMIT 1",
-            "customcert_pages_en": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY id, sequence ASC",
-            "customcert_elements_en": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY pageid, sequence ASC",
+            "cc_templates_default_ptbr": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 2 LIMIT 1",
+            "cc_pages_default_ptbr": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 2 ORDER BY id, sequence ASC",
+            "cc_elements_default_ptbr": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (3, 10) ORDER BY pageid, sequence ASC",
+            "cc_templates_default_en": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 15 LIMIT 1",
+            "cc_pages_default_en": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 15 ORDER BY id, sequence ASC",
+            "cc_elements_default_en": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (222, 223) ORDER BY pageid, sequence ASC",
+            "cc_templates_antigo_vertical": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 237 LIMIT 1",
+            "cc_pages_antigo_vertical": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 237 ORDER BY id, sequence ASC",
+            "cc_elements_antigo_vertical": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (679) ORDER BY pageid, sequence ASC",
+            "cc_templates_dica": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 238 LIMIT 1",
+            "cc_pages_dica": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 238 ORDER BY id, sequence ASC",
+            "cc_elements_dica": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (680, 681) ORDER BY pageid, sequence ASC",
+            "cc_templates_galaxia_maritima": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 239 LIMIT 1",
+            "cc_pages_galaxia_maritima": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 239 ORDER BY id, sequence ASC",
+            "cc_elements_galaxia_maritima": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (682, 683) ORDER BY pageid, sequence ASC",
+            "cc_templates_galaxia_navegacao": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 240 LIMIT 1",
+            "cc_pages_galaxia_navegacao": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 240 ORDER BY id, sequence ASC",
+            "cc_elements_galaxia_navegacao": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (684, 685) ORDER BY pageid, sequence ASC",
+            "cc_templates_rvelasquez": f"SELECT * FROM {db_prefix}_customcert_templates WHERE id = 241 LIMIT 1",
+            "cc_pages_rvelasquez": f"SELECT * FROM {db_prefix}_customcert_pages WHERE templateid = 241 ORDER BY id, sequence ASC",
+            "cc_elements_rvelasquez": f"SELECT * FROM {db_prefix}_customcert_elements WHERE pageid IN (686, 687) ORDER BY pageid, sequence ASC",
             "customfield_field_new": f"SELECT * FROM {db_prefix}_customfield_field WHERE categoryid = 7 ORDER BY id ASC",
             "feedback_item_ptbr": f"SELECT * FROM {db_prefix}_feedback_item WHERE template = 2 AND feedback = 0",
             "feedback_item_en": f"SELECT * FROM {db_prefix}_feedback_item WHERE template = 4 AND feedback = 0"

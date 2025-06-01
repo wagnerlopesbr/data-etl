@@ -58,9 +58,16 @@ def main():
         # - new_engine.begin(): transactional, used for write operations (auto commit/rollback)
 
         # tracking data from specific .csv
-        csv = 'src/utils/cursos_teste.csv'
-        ids_to_migrate = extract_old_course_ids_from_csv(10, csv)
-                
+        """
+        csv_1 = 'src/utils/teste_1.csv'
+        id_list_1 = extract_old_course_ids_from_csv(csv_1)
+        csv_2 = 'src/utils/teste_2.csv'
+        id_list_2 = extract_old_course_ids_from_csv(csv_2)
+        """
+        csv = 'src/utils/teste_3.csv'
+        id_list = extract_old_course_ids_from_csv(csv)
+        print(f"id_list: {id_list}")
+
         with old_engine.connect() as old_conn:
             old_dataframes = extract(old_conn, old_db.prefix, "old")
         
@@ -70,10 +77,41 @@ def main():
         dataframes = {**old_dataframes, **new_dataframes}
 
         dataframes = transform(dataframes)
-        
-        image_texts = downloading(dataframes, ids_to_migrate)
+        """
+        image_texts_1 = downloading(dataframes, id_list_1)
+        image_texts_2 = downloading(dataframes, id_list_2)
+        image_texts = {**image_texts_1, **image_texts_2}
+        """
+        image_texts = downloading(dataframes, id_list)
         with new_engine.begin() as write_conn:
-            load(dataframes, write_conn, new_db, ids_to_migrate, image_texts)
+            """
+                categories by int id (NEW DB CATEGORY ID):
+                    1 = 'QSMS'
+                    4 = 'Sistemas de Gestão'
+                    6 = 'Administração'
+                    10 = 'Treinamentos Internos'
+                    11 = 'Rodolfo'
+                    12 = 'R. Velasquez Medeiros'
+                    13 = 'DICA Tecnologia Soluções Inteligentes'
+                    14 = 'Cursos Personalizados'
+                    16 = 'MODELOS'
+                    17 = 'Turmas Presenciais'
+                    18 = 'Galáxia Marítima'
+                    19 = 'Galáxia Navegação'
+                course_language by string (affects 'feedback_item'):
+                    'en'
+                    'ptbr'
+                customcert_template (cc_template_to_use) by string (affects 'customcert_templates', 'customcert_pages' and 'customcert_elements'):
+                    'default_ptbr'
+                    'default_en'
+                    'antigo_vertical'
+                    'dica'
+                    'galaxia_maritima'
+                    'galaxia_navegacao'
+                    'rvelasquez'
+            """
+            load(dataframes, write_conn, new_db, id_list, image_texts, 19, "antigo_vertical", "en")
+            #load(dataframes, write_conn, new_db, id_list_2, image_texts, 17, "dica", "ptbr")
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
