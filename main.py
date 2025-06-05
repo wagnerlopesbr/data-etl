@@ -98,9 +98,6 @@ def main():
                     17 = 'Turmas Presenciais'
                     18 = 'Galáxia Marítima'
                     19 = 'Galáxia Navegação'
-                course_language by string (affects 'feedback_item'):
-                    'en'
-                    'ptbr'
                 customcert_template (cc_template_to_use) by string (affects 'customcert_templates', 'customcert_pages' and 'customcert_elements'):
                     'default_ptbr'
                     'default_en'
@@ -109,6 +106,9 @@ def main():
                     'galaxia_maritima'
                     'galaxia_navegacao'
                     'rvelasquez'
+                course_language by string (affects 'feedback_item'):
+                    'en'
+                    'ptbr'
             """
             load(dataframes, write_conn, new_db, id_list, image_texts, 19, "antigo_vertical", "en")
             #load(dataframes, write_conn, new_db, id_list_2, image_texts, 17, "dica", "ptbr")
