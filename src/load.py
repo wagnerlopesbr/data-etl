@@ -838,11 +838,22 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         course_modules_filtered_df["module"] == feedback_module_id, "instance"
                     ] = new_feedback_id
 
+                    """
                     # changing the customcert instances ids
                     customcert_module_id = new_modules_map.get("customcert")
                     course_modules_filtered_df.loc[
                         course_modules_filtered_df["module"] == customcert_module_id, "instance"
                     ] = customcert_instance_id
+                    """
+                    # changing the customcert instance for just the first match
+                    customcert_module_id = new_modules_map.get("customcert")
+                    # find the first row index where module == customcert_module_id
+                    matching_idxs = course_modules_filtered_df.index[
+                        course_modules_filtered_df["module"] == customcert_module_id
+                    ]
+                    N = 4 # number of customcert_instances to insert (i'll use cc_template_to_use length); atm only inserts as many as the course already have
+                    for idx in matching_idxs[:N]:
+                        course_modules_filtered_df.loc[idx, "instance"] = customcert_instance_id
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
