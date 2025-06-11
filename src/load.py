@@ -463,9 +463,6 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
         choice_df = dataframes.get("choice", pd.DataFrame())
         choice_options_df = dataframes.get("choice_options", pd.DataFrame())
         feedback_item_df = dataframes.get(f"feedback_item_{course_language}", pd.DataFrame())
-        cc_templates_df = dataframes.get(f"cc_templates_{cc_template_to_use}", pd.DataFrame())
-        cc_pages_df = dataframes.get(f"cc_pages_{cc_template_to_use}", pd.DataFrame())
-        cc_elements_df = dataframes.get(f"cc_elements_{cc_template_to_use}", pd.DataFrame())
         customfield_data_old_df = dataframes.get("customfield_data", pd.DataFrame())
         hvp_df = dataframes.get("hvp", pd.DataFrame())
         question_categories_df = dataframes.get("question_categories", pd.DataFrame())
@@ -738,10 +735,13 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                    param_1=id, param_2=new_course_id, param_3="course")
                 
                 # CUSTOMCERT
-                customcert_df = create_customcert_instance_df(new_course_id, carga_horaria_id, course_language)
-                customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
-                customcert_instance_id = conn.execute(text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
-                logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
+                new_customcert_ids = []
+                for _ in cc_template_to_use:
+                    customcert_df = create_customcert_instance_df(new_course_id, carga_horaria_id, course_language)
+                    customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
+                    customcert_instance_id = conn.execute(text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                    logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
+                    new_customcert_ids.append(customcert_instance_id)
 
                 # COURSE MODULES                
                 if not course_modules_filtered_df.empty:
@@ -838,22 +838,13 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         course_modules_filtered_df["module"] == feedback_module_id, "instance"
                     ] = new_feedback_id
 
-                    """
                     # changing the customcert instances ids
                     customcert_module_id = new_modules_map.get("customcert")
-                    course_modules_filtered_df.loc[
-                        course_modules_filtered_df["module"] == customcert_module_id, "instance"
-                    ] = customcert_instance_id
-                    """
-                    # changing the customcert instance for just the first match
-                    customcert_module_id = new_modules_map.get("customcert")
-                    # find the first row index where module == customcert_module_id
-                    matching_idxs = course_modules_filtered_df.index[
+                    matching_cc_indexes = course_modules_filtered_df.index[
                         course_modules_filtered_df["module"] == customcert_module_id
                     ]
-                    N = 4 # number of customcert_instances to insert (i'll use cc_template_to_use length); atm only inserts as many as the course already have
-                    for idx in matching_idxs[:N]:
-                        course_modules_filtered_df.loc[idx, "instance"] = customcert_instance_id
+                    for i, cc_id in zip(matching_cc_indexes, new_customcert_ids):
+                        course_modules_filtered_df.loc[i, "instance"] = cc_id
 
                     # storing old ids
                     course_modules_filtered_df["old_id"] = course_modules_filtered_df["id"]
@@ -956,9 +947,13 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         logger.error(f"Error inserting QUESTION_REFERENCES for course {new_course_id}: {e}")
 
                 # CUSTOMCERT
-                if not customcert_df.empty:
+                for cc_id, template in zip(new_customcert_ids, cc_template_to_use):
+                    cc_templates_df = dataframes.get(f"cc_templates_{template}", pd.DataFrame())
+                    cc_pages_df = dataframes.get(f"cc_pages_{template}", pd.DataFrame())
+                    cc_elements_df = dataframes.get(f"cc_elements_{template}", pd.DataFrame())
+
                     customcert_cm_id = conn.execute(text(f"SELECT id FROM {course_modules_table} WHERE course = :course_id AND module = 29 AND instance = :customcert_instance_id ORDER BY id DESC LIMIT 1"),
-                                                    {"course_id": new_course_id, "customcert_instance_id": customcert_instance_id}).scalar()
+                                                    {"course_id": new_course_id, "customcert_instance_id": cc_id}).scalar()
                     logger.info(f"NEW CUSTOMCERT CM ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT CM ID: {customcert_cm_id}")
 
                     customcert_cm_context_id = conn.execute(text(f"SELECT id FROM {context_table} WHERE instanceid = :instanceid AND contextlevel = 70 ORDER BY id DESC LIMIT 1"), {"instanceid": customcert_cm_id}).scalar()
@@ -967,11 +962,10 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                     customcert_template_df = create_customcert_template_df(cc_templates_df.copy(), customcert_cm_context_id, course_shortname)
                     customcert_template_df.to_sql(f"{cc_templates_table}", conn, if_exists="append", index=False)
                     customcert_template_id = conn.execute(text(f"SELECT id FROM {cc_templates_table} WHERE contextid = :context_id ORDER BY id DESC LIMIT 1"), {"context_id": customcert_cm_context_id}).scalar()
-                    
-                    customcert_id = conn.execute(text(f"SELECT id FROM {cc_table} WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
+                   
                     conn.execute(
                         text(f"UPDATE {cc_table} SET templateid = :templateid WHERE id = :customcert_id and course = :course_id"),
-                        {"templateid": customcert_template_id, "customcert_id": customcert_id, "course_id": new_course_id}
+                        {"templateid": customcert_template_id, "customcert_id": cc_id, "course_id": new_course_id}
                     )
                     logger.info(f"NEW CUSTOMCERT TEMPLATE ID inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT TEMPLATE ID: {customcert_template_id}")
 
@@ -981,7 +975,7 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                                         {"templateid": customcert_template_id}).fetchall()
                     cc_pages_ids = [row[0] for row in customcert_pages_ids]
                     logger.info(f"NEW CUSTOMCERT PAGES IDS inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT PAGES IDS: {cc_pages_ids}")
-                    
+
                     customcert_elements_df = create_customcert_elements_df(cc_elements_df.copy(), cc_pages_ids)
                     customcert_elements_df.to_sql(f"{cc_elements_table}", conn, if_exists="append", index=False)
                     customcert_elements_ids = conn.execute(text(f"SELECT id FROM {cc_elements_table} WHERE pageid IN :pageids ORDER BY id, sequence ASC"), {"pageids": tuple(cc_pages_ids)}).fetchall()
@@ -1229,7 +1223,7 @@ def downloading(dataframes: Dict[str, pd.DataFrame], ids: List[int]):
     logger.info(f"-------------------- End of downloading process. --------------------")
     return image_texts
 
-def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], image_texts: Dict[int, str], category_to_insert, cc_template_to_use: str, course_language: str):
+def load(dataframes: Dict[str, pd.DataFrame], conn, new_db, ids: List[int], image_texts: Dict[int, str], category_to_insert, cc_template_to_use: List[str], course_language: str):
     logger.debug(f"-------------------- Starting the loading process... --------------------")
 
     output_dir = "src/loaded"
