@@ -22,7 +22,5 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- adapt 'customcert' insertion logic to manipulate and insert as many instances as i want to
 - adapt 'customcert_templates' to fit the 'agroupment' needed to be able to get that customcert instance
-- adapt 'load()' call to use a list of 'customcert_templates' ids (same as course_ids) instead of a string
 - adapt 'reengagement' logic to one specific instance target specific 'course_module' (the first one of the 'content'/'conteúdo' section)

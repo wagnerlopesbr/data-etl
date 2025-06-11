@@ -735,15 +735,20 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                                    param_1=id, param_2=new_course_id, param_3="course")
                 
                 # CUSTOMCERT
+                old_module_name_to_id = {name: id for id, name in old_modules_map.items()}
+                old_customcert_module_id = old_module_name_to_id.get("customcert")
+                old_customcert_count = course_modules_filtered_df[course_modules_filtered_df["module"] == old_customcert_module_id].shape[0]
+                how_many_templates = len(cc_template_to_use) if cc_template_to_use else 1
+                how_many_to_insert = min(how_many_templates, old_customcert_count)
                 new_customcert_ids = []
-                for _ in cc_template_to_use:
+                for _ in cc_template_to_use[:how_many_to_insert]:  # insert only the number of templates specified and ordered by cc_template_to_use
                     customcert_df = create_customcert_instance_df(new_course_id, carga_horaria_id, course_language)
                     customcert_df.to_sql(f"{cc_table}", conn, if_exists="append", index=False)
                     customcert_instance_id = conn.execute(text(f"SELECT id FROM {new_db.prefix}_customcert WHERE course = :course_id ORDER BY id DESC LIMIT 1"), {"course_id": new_course_id}).scalar()
                     logger.info(f"NEW CUSTOMCERT inserted successfully! OLD COURSE ID: {id} | NEW CUSTOMCERT ID: {customcert_instance_id}")
                     new_customcert_ids.append(customcert_instance_id)
 
-                # COURSE MODULES                
+                # COURSE MODULES
                 if not course_modules_filtered_df.empty:
                     course_modules_filtered_df["course"] = new_course_id
                     # changing the module ids
