@@ -66,7 +66,6 @@ def main():
         """
         csv = 'src/utils/teste_3.csv'
         id_list = extract_old_course_ids_from_csv(csv)
-        print(f"id_list: {id_list}")
 
         with old_engine.connect() as old_conn:
             old_dataframes = extract(old_conn, old_db.prefix, "old")
@@ -96,7 +95,8 @@ def main():
                     14 = 'Cursos Personalizados'
                     16 = 'MODELOS'
                     17 = 'Turmas Presenciais'
-                    18 = 'Galáxia'
+                    20 = 'Galáxia Marítima'
+                    21 = 'Galáxia Navegação'
                 customcert_template (cc_template_to_use) by string (affects 'customcert_templates', 'customcert_pages' and 'customcert_elements'):
                     'default_ptbr'
                     'default_en'
@@ -109,8 +109,8 @@ def main():
                     'en'
                     'ptbr'
             """
-            load(dataframes, write_conn, new_db, id_list, image_texts, 4, ["galaxia_maritima", "galaxia_navegacao", "dica"], "ptbr")
-            #load(dataframes, write_conn, new_db, id_list_2, image_texts, 17, "dica", "ptbr")
+            load(dataframes, write_conn, new_db, id_list, image_texts, 20, ["galaxia_maritima"], "ptbr")
+            load(dataframes, write_conn, new_db, id_list, image_texts, 21, ["galaxia_navegacao"], "ptbr")
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")

@@ -22,5 +22,4 @@ source .venv/bin/activate
 ```
 
 ### reminder (to Wagner; to be deleted)
-- adapt 'customcert_templates' to fit the 'agroupment' needed to be able to get that customcert instance
 - adapt 'reengagement' logic to one specific instance target specific 'course_module' (the first one of the 'content'/'conteúdo' section)
