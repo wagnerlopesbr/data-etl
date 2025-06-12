@@ -496,6 +496,8 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                 course_old_context_id = courses_context_df[courses_context_df["instanceid"] == id]["id"].iloc[0]
                 course_shortname = course_copy["shortname"].iloc[0]
                 course_copy["category"] = category
+                course_copy["shortname"] = course_copy["category"].astype(str) + "-" + course_copy["shortname"]
+                course_copy["idnumber"] = course_copy["shortname"]
                 course_copy = course_copy.drop(columns=["id", "originalcourseid"])
 
                 # course
