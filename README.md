@@ -20,6 +20,3 @@ source .venv/bin/activate
 ```bash
 source .venv/bin/activate
 ```
-
-### reminder (to Wagner; to be deleted)
-- adapt 'reengagement' logic to one specific instance target specific 'course_module' (the first one of the 'content'/'conteúdo' section)

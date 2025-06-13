@@ -902,6 +902,36 @@ def if_table_course(conn, image_texts, table: str, ids: List[int], dataframes: D
                         # update context path
                         path_cm = f"/1/{context_category_id}/{new_course_context_id}/{new_cm_context_id}"
                         conn.execute(text(f"UPDATE {context_table} SET path = :path WHERE id = :id"), {"path": path_cm, "id": new_cm_context_id})
+                    
+                    target_cm_ids = [
+                        m for m in (
+                            new_modules_map.get("quiz"),
+                            new_modules_map.get("page")
+                        ) if m is not None
+                    ]
+                    targeted_module = course_modules_filtered_df[
+                        (course_modules_filtered_df["completion"] == 2) &
+                        (course_modules_filtered_df["completionview"] == 1) &
+                        (course_modules_filtered_df["module"].isin(target_cm_ids))
+                    ]
+                    added_target = int(targeted_module["added"].max())
+                    old_target = int(targeted_module.loc[targeted_module["added"] == added_target, "old_id"].iat[0])
+                    new_target = module_instance_mapping.get(old_target)
+                    if not new_target:
+                        continue
+                    else:
+                        names = ("alerta de continuação do curso", "course continuation alert")
+                        conn.execute(text(f"""
+                            UPDATE {reengagement_table}
+                            SET suppresstarget = :new_target
+                            WHERE course = :new_course_id
+                            AND lower(trim(name)) IN :names
+                        """), {
+                            "new_target": new_target,
+                            "new_course_id": new_course_id,
+                            "names": names
+                        })
+                        logger.info(f"REENGAGEMENT suppresstarget atualizado para {new_target}")
                     logger.info(f"{len(course_modules_filtered_df)} course_modules inserted.")
 
                 # Create question references
