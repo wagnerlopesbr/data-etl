@@ -109,8 +109,7 @@ def main():
                     'en'
                     'ptbr'
             """
-            load(dataframes, write_conn, new_db, id_list, image_texts, 20, ["galaxia_maritima"], "ptbr")
-            load(dataframes, write_conn, new_db, id_list, image_texts, 21, ["galaxia_navegacao"], "ptbr")
+            load(dataframes, write_conn, new_db, id_list, image_texts, 1, ["galaxia_navegacao"], "ptbr")
         logger.info("ETL process completed successfully!")
     except Exception as e:
         logger.critical(f"ETL process failed: {e}.")
